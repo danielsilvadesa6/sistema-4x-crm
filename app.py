@@ -24,13 +24,13 @@ TIPOS_INTERACAO = ["WhatsApp", "Ligação", "E-mail", "Reunião", "Presencial", 
 # ─── Camada de compatibilidade SQLite ↔ PostgreSQL ───────────────────────────
 
 _SQLITE_ADAPT = [
-    ("%s",                                "?"),
-    ("SERIAL PRIMARY KEY",                "INTEGER PRIMARY KEY AUTOINCREMENT"),
-    ("DEFAULT NOW()",                     "DEFAULT (datetime('now', 'localtime'))"),
-    ("NOW()",                             "datetime('now', 'localtime')"),
-    ("TO_CHAR(criado_em, 'YYYY-MM')",     "strftime('%Y-%m', criado_em)"),
     ("NOW() - INTERVAL '30 days'",        "datetime('now', '-30 days', 'localtime')"),
     ("NOW() - INTERVAL '12 months'",      "datetime('now', '-12 months', 'localtime')"),
+    ("DEFAULT NOW()",                     "DEFAULT (datetime('now', 'localtime'))"),
+    ("TO_CHAR(criado_em, 'YYYY-MM')",     "strftime('%Y-%m', criado_em)"),
+    ("NOW()",                             "datetime('now', 'localtime')"),
+    ("%s",                                "?"),
+    ("SERIAL PRIMARY KEY",                "INTEGER PRIMARY KEY AUTOINCREMENT"),
 ]
 
 def _adapt(query):
