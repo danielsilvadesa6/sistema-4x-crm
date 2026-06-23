@@ -1,1 +1,1 @@
-web: gunicorn app:app --preload
+web: source .venv/bin/activate && gunicorn app:app --preload

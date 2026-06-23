@@ -1,2 +1,8 @@
 [phases.setup]
-nixPkgs = ["postgresql"]
+nixPkgs = ["python311", "postgresql"]
+
+[phases.build]
+cmds = ["python3.11 -m venv .venv", "source .venv/bin/activate && pip install -r requirements.txt"]
+
+[start]
+cmd = "source .venv/bin/activate && gunicorn app:app --preload"
