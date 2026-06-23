@@ -812,8 +812,9 @@ def exportar_pdf():
     return resp
 
 
+init_db()
+
 if __name__ == "__main__":
-    init_db()
     print("\nSistema 4X CRM iniciado!")
     print("Acesse: http://localhost:5000\n")
     port = int(os.environ.get("PORT", 5000))
