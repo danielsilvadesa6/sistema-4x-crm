@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block title %}{{ lead.nome }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="#" onclick="history.back(); return false;" class="back-link">← Voltar</a>
+    <h1>{{ lead.nome }}</h1>
+    <span class="etapa-badge etapa-{{ lead.etapa | replace(' ', '-') | lower }}">{{ lead.etapa }}</span>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button onclick="toggleEdit()" class="btn btn-ghost">Editar</button>
+    <form method="post" action="{{ url_for('excluir_lead', lead_id=lead.id) }}"
+          onsubmit="return confirm('Excluir este lead permanentemente?')">
+      <button type="submit" class="btn btn-danger">Excluir</button>
+    </form>
+  </div>
+</div>
+
+<!-- Barra de progresso da etapa -->
+{% set etapas_prog = ['Novo Lead','Tentando Contato','Contato Feito','Consulta Agendada','Fechado'] %}
+{% if lead.etapa != 'Perdido' %}
+<div class="progresso-etapa">
+  {% for e in etapas_prog %}
+  {% set idx_atual = etapas_prog.index(lead.etapa) if lead.etapa in etapas_prog else -1 %}
+  {% set idx_e = loop.index0 %}
+  <div class="prog-step {% if idx_e < idx_atual %}prog-done{% elif idx_e == idx_atual %}prog-active{% endif %}">
+    <div class="prog-circle">{{ loop.index }}</div>
+    <span class="prog-label">{{ e }}</span>
+  </div>
+  {% if not loop.last %}<div class="prog-line {% if idx_e < idx_atual %}prog-done{% endif %}"></div>{% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Card de negócio fechado (só aparece quando Fechado) -->
+{% if lead.etapa == 'Fechado' %}
+<div class="card card-fechado">
+  <div class="fechado-header">
+    <div>
+      <span class="fechado-label">Negócio Fechado</span>
+      {% if lead.valor_servico %}
+      <div class="fechado-valor" id="fechado-valor-display">R$ {{ "%.2f"|format(lead.valor_servico) }}</div>
+      {% else %}
+      <div class="fechado-valor fechado-vazio" id="fechado-valor-display">Valor não informado</div>
+      {% endif %}
+    </div>
+    <button onclick="toggleEditValor()" class="btn btn-ghost btn-sm" id="btn-editar-valor">Editar valor</button>
+  </div>
+  <form method="post" action="{{ url_for('editar_lead', lead_id=lead.id) }}"
+        id="form-valor-fechado" style="display:none;margin-top:16px">
+    {# Repassa todos os campos existentes para não perder dados #}
+    <input type="hidden" name="nome"           value="{{ lead.nome }}">
+    <input type="hidden" name="whatsapp"       value="{{ lead.whatsapp }}">
+    <input type="hidden" name="email"          value="{{ lead.email or '' }}">
+    <input type="hidden" name="segmento"       value="{{ lead.segmento or '' }}">
+    <input type="hidden" name="origem"         value="{{ lead.origem or '' }}">
+    <input type="hidden" name="observacoes"    value="{{ lead.observacoes or '' }}">
+    <input type="hidden" name="data_consulta"  value="{{ lead.data_consulta or '' }}">
+    <input type="hidden" name="hora_consulta"  value="{{ lead.hora_consulta or '' }}">
+    <input type="hidden" name="motivo_perda"   value="{{ lead.motivo_perda or '' }}">
+    <div style="display:flex;gap:10px;align-items:flex-end">
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Valor do negócio (R$)</label>
+        <input type="number" name="valor_servico" step="0.01" min="0"
+               value="{{ lead.valor_servico or '' }}"
+               class="input" placeholder="Ex: 3500.00" autofocus>
+      </div>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+      <button type="button" onclick="toggleEditValor()" class="btn btn-ghost">Cancelar</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="detalhe-grid">
+  <!-- Painel de dados -->
+  <div class="card" id="painel-info">
+    <h2 class="card-title">Dados do Lead</h2>
+    <div class="info-grid">
+      <div class="info-row"><span class="info-label">WhatsApp</span><span class="info-val">{{ lead.whatsapp }}</span></div>
+      <div class="info-row"><span class="info-label">E-mail</span><span class="info-val">{{ lead.email or '—' }}</span></div>
+      <div class="info-row"><span class="info-label">Segmento</span><span class="info-val">{{ lead.segmento or '—' }}</span></div>
+      <div class="info-row"><span class="info-label">Origem</span><span class="info-val">{{ lead.origem or '—' }}</span></div>
+      <div class="info-row"><span class="info-label">Valor do Serviço</span><span class="info-val">{% if lead.valor_servico %}R$ {{ "%.2f"|format(lead.valor_servico) }}{% else %}—{% endif %}</span></div>
+      <div class="info-row"><span class="info-label">Custo de Aquisição</span><span class="info-val">{% if lead.custo_aquisicao %}R$ {{ "%.2f"|format(lead.custo_aquisicao) }}{% else %}—{% endif %}</span></div>
+      <div class="info-row"><span class="info-label">Consulta</span><span class="info-val">{% if lead.data_consulta %}{{ lead.data_consulta }} às {{ lead.hora_consulta }}{% else %}—{% endif %}</span></div>
+      {% if lead.motivo_perda %}
+      <div class="info-row"><span class="info-label">Motivo da perda</span><span class="info-val text-alert">{{ lead.motivo_perda }}</span></div>
+      {% endif %}
+      {% if lead.observacoes %}
+      <div class="info-row full"><span class="info-label">Observações</span><span class="info-val">{{ lead.observacoes }}</span></div>
+      {% endif %}
+    </div>
+    {% if dias_sem_contato > 7 %}
+    <div class="alert-banner">⚠ {{ dias_sem_contato }} dias sem contato — faça um follow-up!</div>
+    {% endif %}
+
+    <!-- Lembrete ativo -->
+    {% if lead.lembrete_em %}
+    <div class="lembrete-card">
+      <div class="lembrete-card-header">
+        <span>🔔 Lembrete: <strong>{% if lead.lembrete_em == hoje %}Hoje{% else %}{{ lead.lembrete_em }}{% endif %}</strong></span>
+        <form method="post" action="{{ url_for('concluir_lembrete', lead_id=lead.id) }}" style="margin:0">
+          <input type="hidden" name="volta" value="ver_lead">
+          <button type="submit" class="btn btn-sm">✓ Concluir</button>
+        </form>
+      </div>
+      {% if lead.lembrete_nota %}<p class="lembrete-nota-card">{{ lead.lembrete_nota }}</p>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Formulário de edição (oculto por padrão) -->
+  <form method="post" action="{{ url_for('editar_lead', lead_id=lead.id) }}" id="form-edit" class="card" style="display:none">
+    <h2 class="card-title">Editar Lead</h2>
+    <div class="form-group">
+      <label>Nome *</label>
+      <input type="text" name="nome" value="{{ lead.nome }}" required class="input">
+    </div>
+    <div class="form-group">
+      <label>WhatsApp *</label>
+      <input type="text" name="whatsapp" value="{{ lead.whatsapp }}" required class="input">
+    </div>
+    <div class="form-group">
+      <label>E-mail</label>
+      <input type="email" name="email" value="{{ lead.email or '' }}" class="input">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Segmento</label>
+        <select name="segmento" class="input">
+          {% for s in segmentos %}
+          <option value="{{ s }}" {% if lead.segmento == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Origem</label>
+        <select name="origem" class="input">
+          {% for o in origens %}
+          <option value="{{ o }}" {% if lead.origem == o %}selected{% endif %}>{{ o }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data da Consulta</label>
+        <input type="date" name="data_consulta" value="{{ lead.data_consulta or '' }}" class="input">
+      </div>
+      <div class="form-group">
+        <label>Hora da Consulta</label>
+        <input type="time" name="hora_consulta" value="{{ lead.hora_consulta or '' }}" class="input">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Valor do Serviço (R$)</label>
+        <input type="number" name="valor_servico" step="0.01" value="{{ lead.valor_servico or '' }}" class="input">
+      </div>
+      <div class="form-group">
+        <label>Custo de Aquisição (R$)</label>
+        <input type="number" name="custo_aquisicao" step="0.01" value="{{ lead.custo_aquisicao or '' }}" class="input" placeholder="Quanto custou captar este lead?">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Motivo da Perda</label>
+        <input type="text" name="motivo_perda" value="{{ lead.motivo_perda or '' }}" class="input">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Observações</label>
+      <textarea name="observacoes" class="input" rows="3">{{ lead.observacoes or '' }}</textarea>
+    </div>
+
+    <div style="border-top:1px solid var(--border);margin:16px 0 12px;padding-top:14px">
+      <h3 style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--copper)">🔔 Lembrete de Follow-up</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data do Lembrete</label>
+          <input type="date" name="lembrete_em" value="{{ lead.lembrete_em or '' }}" class="input">
+        </div>
+        <div class="form-group">
+          <label>Anotação do Lembrete</label>
+          <input type="text" name="lembrete_nota" value="{{ lead.lembrete_nota or '' }}" class="input" placeholder="Ex: Ligar para fechar proposta">
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button type="submit" class="btn btn-primary">Salvar</button>
+      <button type="button" onclick="toggleEdit()" class="btn btn-ghost">Cancelar</button>
+    </div>
+  </form>
+</div>
+
+<!-- Timeline de interações -->
+<div class="card" style="margin-top:24px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2 class="card-title" style="margin:0">Histórico de Interações</h2>
+    <button onclick="toggleNovaInteracao()" class="btn btn-primary">+ Registrar</button>
+  </div>
+
+  <!-- Form nova interação (oculto) -->
+  <form method="post" action="{{ url_for('nova_interacao', lead_id=lead.id) }}"
+        id="form-interacao" style="display:none;margin-bottom:20px" class="form-interacao">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select name="tipo" class="input" required>
+          {% for t in tipos_interacao %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Data e Hora</label>
+        <input type="datetime-local" name="data_hora" class="input"
+               value="{{ now_str if now_str else '' }}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Anotação</label>
+      <textarea name="anotacao" class="input" rows="2" placeholder="Descreva o que foi discutido…"></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button type="submit" class="btn btn-primary">Salvar Interação</button>
+      <button type="button" onclick="toggleNovaInteracao()" class="btn btn-ghost">Cancelar</button>
+    </div>
+  </form>
+
+  <!-- Timeline -->
+  <div class="timeline">
+    {% for i in interacoes %}
+    <div class="timeline-item">
+      <div class="timeline-dot tipo-{{ i.tipo | lower }}"></div>
+      <div class="timeline-content">
+        <div class="timeline-header">
+          <span class="timeline-tipo">{{ i.tipo }}</span>
+          <span class="timeline-data">{{ i.data_hora[:16] | replace('T', ' ') }}</span>
+        </div>
+        {% if i.anotacao %}
+        <p class="timeline-texto">{{ i.anotacao }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <p class="empty-msg">Nenhuma interação registrada ainda.</p>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+function toggleEditValor() {
+  const form = document.getElementById('form-valor-fechado');
+  const btn  = document.getElementById('btn-editar-valor');
+  if (form.style.display === 'none') {
+    form.style.display = 'block';
+    btn.textContent = 'Cancelar';
+    form.querySelector('input[type=number]').focus();
+  } else {
+    form.style.display = 'none';
+    btn.textContent = 'Editar valor';
+  }
+}
+
+function toggleEdit() {
+  const info = document.getElementById('painel-info');
+  const form = document.getElementById('form-edit');
+  if (form.style.display === 'none') {
+    info.style.display = 'none'; form.style.display = 'block';
+  } else {
+    info.style.display = 'block'; form.style.display = 'none';
+  }
+}
+function toggleNovaInteracao() {
+  const f = document.getElementById('form-interacao');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  if (f.style.display === 'block') {
+    const dt = document.querySelector('[name=data_hora]');
+    if (!dt.value) {
+      const now = new Date();
+      dt.value = now.toISOString().slice(0,16);
+    }
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Pipeline{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Pipeline Kanban</h1>
+  <span class="subtitle">Arraste os cards entre as colunas</span>
+</div>
+
+<div class="kanban-board" id="kanban">
+  {% for etapa in etapas %}
+  <div class="kanban-col" data-etapa="{{ etapa }}">
+    <div class="col-header">
+      <span class="col-title">{{ etapa }}</span>
+      <span class="col-count">{{ colunas[etapa] | length }}</span>
+    </div>
+    <div class="col-cards" id="col-{{ loop.index }}"
+         ondragover="event.preventDefault()"
+         ondrop="onDrop(event, '{{ etapa }}')">
+      {% for card in colunas[etapa] %}
+      <div class="kanban-card {% if card.alerta %}alerta{% endif %}"
+           draggable="true"
+           id="card-{{ card.id }}"
+           data-id="{{ card.id }}"
+           data-etapa="{{ card.etapa }}"
+           ondragstart="onDragStart(event)"
+           onclick="window.location='{{ url_for('ver_lead', lead_id=card.id) }}'">
+        <div class="card-nome">{{ card.nome }}</div>
+        <div class="card-tags">
+          <span class="tag tag-seg">{{ card.segmento }}</span>
+          <span class="tag tag-orig">{{ card.origem }}</span>
+        </div>
+        <div class="card-footer-info">
+          {% if card.alerta %}
+          <span class="card-aviso">⚠ {{ card.dias_sem_contato }}d sem contato</span>
+          {% else %}
+          <span class="card-dias">{{ card.dias_sem_contato }}d sem contato</span>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="col-empty">Nenhum lead</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Modal para campos obrigatórios antes de mover -->
+<div id="modal-campo" class="modal-overlay" style="display:none">
+  <div class="modal-box" style="min-width:340px">
+    <div class="modal-icon">🔒</div>
+    <p id="modal-campo-msg"></p>
+    <div id="modal-campo-form"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button id="modal-campo-ok" class="btn btn-primary" style="flex:1">Salvar e Mover</button>
+      <button onclick="cancelarMover()" class="btn btn-ghost" style="flex:1">Cancelar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/kanban.js') }}"></script>
+{% endblock %}

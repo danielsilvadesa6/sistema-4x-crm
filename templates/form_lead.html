@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Novo Lead{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="{{ url_for('leads') }}" class="back-link">← Leads</a>
+    <h1>Novo Lead</h1>
+  </div>
+</div>
+
+<div class="card" style="max-width:640px">
+  <form method="post">
+    <div class="form-group">
+      <label>Nome completo *</label>
+      <input type="text" name="nome" required class="input" placeholder="Ex: Dr. João Silva">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>WhatsApp *</label>
+        <input type="text" name="whatsapp" required class="input" placeholder="11999999999">
+      </div>
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" name="email" class="input" placeholder="email@exemplo.com">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Segmento</label>
+        <select name="segmento" class="input">
+          {% for s in segmentos %}
+          <option value="{{ s }}">{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Origem</label>
+        <select name="origem" class="input">
+          {% for o in origens %}
+          <option value="{{ o }}">{{ o }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Custo de Aquisição (R$)</label>
+      <input type="number" name="custo_aquisicao" step="0.01" class="input"
+             placeholder="Quanto custou captar este lead? (opcional)">
+    </div>
+    <div class="form-group">
+      <label>Observações iniciais</label>
+      <textarea name="observacoes" class="input" rows="3"
+                placeholder="Informações relevantes sobre o lead…"></textarea>
+    </div>
+    <div style="border-top:1px solid var(--border);margin:16px 0 12px;padding-top:14px">
+      <h3 style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--copper)">🔔 Lembrete de Follow-up</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data do Lembrete</label>
+          <input type="date" name="lembrete_em" class="input">
+        </div>
+        <div class="form-group">
+          <label>Anotação</label>
+          <input type="text" name="lembrete_nota" class="input"
+                 placeholder="Ex: Ligar amanhã às 10h">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn btn-primary">Cadastrar Lead</button>
+      <a href="{{ url_for('leads') }}" class="btn btn-ghost">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

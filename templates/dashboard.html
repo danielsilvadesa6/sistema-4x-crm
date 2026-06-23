@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <span class="subtitle">Visão geral dos seus leads</span>
+</div>
+
+<!-- Cards de total por etapa -->
+<div class="stats-grid">
+  {% for etapa in etapas %}
+  <a href="{{ url_for('leads', etapa=etapa) }}" class="stat-card">
+    <span class="stat-label">{{ etapa }}</span>
+    <span class="stat-value">{{ total_por_etapa[etapa] }}</span>
+    <div class="stat-bar" style="width:{{ [total_por_etapa[etapa] * 20, 100] | min }}%"></div>
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Lembretes do dia -->
+{% if lembretes %}
+<div class="card card-lembretes">
+  <h2 class="card-title">
+    <span class="lembrete-icon">🔔</span>
+    Lembretes de Hoje
+    <span class="badge-alert">{{ lembretes | length }}</span>
+  </h2>
+  <ul class="alert-list">
+    {% for l in lembretes %}
+    <li class="alert-item lembrete-item">
+      <div style="flex:1;min-width:0">
+        <a href="{{ url_for('ver_lead', lead_id=l.id) }}" class="alert-nome">{{ l.nome }}</a>
+        {% if l.lembrete_nota %}
+        <span class="lembrete-nota">{{ l.lembrete_nota }}</span>
+        {% endif %}
+      </div>
+      <span class="alert-etapa">{{ l.etapa }}</span>
+      <span class="lembrete-data {% if l.lembrete_em < hoje %}lembrete-atrasado{% endif %}">
+        {% if l.lembrete_em == hoje %}Hoje{% else %}{{ l.lembrete_em }}{% endif %}
+      </span>
+      <form method="post" action="{{ url_for('concluir_lembrete', lead_id=l.id) }}" style="margin:0">
+        <input type="hidden" name="volta" value="dashboard">
+        <button type="submit" class="btn btn-sm" title="Marcar como concluído">✓ Concluir</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="dashboard-row">
+  <!-- Gráfico por origem -->
+  <div class="card">
+    <h2 class="card-title">Leads por Origem</h2>
+    <div class="bar-chart">
+      {% set max_val = por_origem.values() | max if por_origem else 1 %}
+      {% for origem, n in por_origem.items() %}
+      <div class="bar-row">
+        <span class="bar-label">{{ origem }}</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:{{ (n / max_val * 100) | int }}%"></div>
+        </div>
+        <span class="bar-count">{{ n }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="card-footer">{{ ultimos_30 }} leads nos últimos 30 dias</div>
+  </div>
+
+  <!-- Leads com follow-up atrasado -->
+  <div class="card">
+    <h2 class="card-title">Follow-up Atrasado <span class="badge-alert">{{ atrasados | length }}</span></h2>
+    {% if atrasados %}
+    <ul class="alert-list">
+      {% for a in atrasados %}
+      <li class="alert-item">
+        <a href="{{ url_for('ver_lead', lead_id=a.id) }}" class="alert-nome">{{ a.nome }}</a>
+        <span class="alert-etapa">{{ a.etapa }}</span>
+        <span class="alert-dias">{{ a.dias }}d sem contato</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-msg">Nenhum follow-up atrasado.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

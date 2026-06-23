@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Leads{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Leads</h1>
+  <a href="{{ url_for('novo_lead') }}" class="btn btn-primary">+ Novo Lead</a>
+</div>
+
+<!-- Filtros -->
+<form method="get" class="filter-bar">
+  <input type="text" name="q" value="{{ filtros.q }}" placeholder="Buscar por nome ou WhatsApp…" class="input-search">
+  <select name="etapa" class="select-filter">
+    <option value="">Todas as etapas</option>
+    {% for e in etapas %}
+    <option value="{{ e }}" {% if filtros.etapa == e %}selected{% endif %}>{{ e }}</option>
+    {% endfor %}
+  </select>
+  <select name="origem" class="select-filter">
+    <option value="">Todas as origens</option>
+    {% for o in origens %}
+    <option value="{{ o }}" {% if filtros.origem == o %}selected{% endif %}>{{ o }}</option>
+    {% endfor %}
+  </select>
+  <select name="segmento" class="select-filter">
+    <option value="">Todos os segmentos</option>
+    {% for s in segmentos %}
+    <option value="{{ s }}" {% if filtros.segmento == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-primary">Filtrar</button>
+  <a href="{{ url_for('leads') }}" class="btn btn-ghost">Limpar</a>
+</form>
+
+<!-- Tabela -->
+<div class="table-wrap">
+  <table class="leads-table">
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>WhatsApp</th>
+        <th>Segmento</th>
+        <th>Origem</th>
+        <th>Etapa</th>
+        <th>Último contato</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in leads %}
+      <tr class="{% if l.alerta %}row-alerta{% endif %}">
+        <td><a href="{{ url_for('ver_lead', lead_id=l.id) }}" class="lead-link">{{ l.nome }}</a></td>
+        <td>{{ l.whatsapp }}</td>
+        <td><span class="tag tag-seg">{{ l.segmento }}</span></td>
+        <td><span class="tag tag-orig">{{ l.origem }}</span></td>
+        <td><span class="etapa-badge etapa-{{ l.etapa | replace(' ', '-') | lower }}">{{ l.etapa }}</span></td>
+        <td>
+          {% if l.alerta %}
+          <span class="text-alert">{{ l.dias_sem_contato }}d ⚠</span>
+          {% else %}
+          <span class="text-muted">{{ l.dias_sem_contato }}d</span>
+          {% endif %}
+        </td>
+        <td><a href="{{ url_for('ver_lead', lead_id=l.id) }}" class="btn btn-sm">Ver</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-msg">Nenhum lead encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

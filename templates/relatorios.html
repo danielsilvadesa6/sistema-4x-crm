@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Relatórios</h1>
+    <span class="subtitle">Análise completa dos seus leads</span>
+  </div>
+  <a href="{{ url_for('exportar_pdf') }}" class="btn btn-primary" target="_blank">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Exportar PDF
+  </a>
+</div>
+
+<!-- KPIs principais -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <span class="kpi-label">Total de Leads</span>
+    <span class="kpi-valor">{{ total_leads }}</span>
+  </div>
+  <div class="kpi-card kpi-green">
+    <span class="kpi-label">Negócios Fechados</span>
+    <span class="kpi-valor">{{ total_fechados }}</span>
+  </div>
+  <div class="kpi-card kpi-copper">
+    <span class="kpi-label">Taxa de Conversão</span>
+    <span class="kpi-valor">{{ taxa_conv_geral }}%</span>
+  </div>
+  <div class="kpi-card kpi-green">
+    <span class="kpi-label">Receita Fechada</span>
+    <span class="kpi-valor kpi-receita">R$ {{ "%.0f"|format(receita_total) }}</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Ticket Médio</span>
+    <span class="kpi-valor kpi-receita">R$ {{ "%.0f"|format(ticket_medio) }}</span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Tempo Médio p/ Fechar</span>
+    <span class="kpi-valor">{{ tempo_medio_fechamento }}<span class="kpi-unit">dias</span></span>
+  </div>
+</div>
+
+<!-- Linha 1: Funil + Evolução mensal -->
+<div class="rel-row">
+  <div class="card">
+    <h2 class="card-title">Funil de Conversão</h2>
+    <div class="funil-wrap">
+      {% set max_funil = funil.values() | max if funil.values() | max > 0 else 1 %}
+      {% for etapa in etapas %}
+      {% set n = funil[etapa] %}
+      {% set pct = (n / max_funil * 100) | int %}
+      <div class="funil-row">
+        <span class="funil-label">{{ etapa }}</span>
+        <div class="funil-track">
+          <div class="funil-bar etapa-bar-{{ etapa | replace(' ','-') | lower }}"
+               style="width: {{ pct }}%">
+            <span class="funil-n">{{ n }}</span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Evolução Mensal</h2>
+    <div class="chart-wrap">
+      <canvas id="chartEvolucao"></canvas>
+    </div>
+    {% if not evolucao %}
+    <p class="empty-msg">Dados insuficientes para gerar o gráfico.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Linha 2: Pizza origem + Pizza segmento -->
+<div class="rel-row">
+  <div class="card">
+    <h2 class="card-title">Leads por Origem</h2>
+    <div class="chart-wrap chart-pie">
+      <canvas id="chartOrigem"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Leads por Segmento</h2>
+    <div class="chart-wrap chart-pie">
+      <canvas id="chartSegmento"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- KPI de investimento -->
+{% if investimento_total > 0 %}
+<div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-bottom:16px">
+  <div class="kpi-card">
+    <span class="kpi-label">Investimento Total</span>
+    <span class="kpi-valor kpi-receita">R$ {{ "%.0f"|format(investimento_total) }}</span>
+  </div>
+  <div class="kpi-card {% if receita_total > investimento_total %}kpi-green{% endif %}">
+    <span class="kpi-label">ROI Geral</span>
+    <span class="kpi-valor">
+      {% if investimento_total > 0 %}
+        {{ "%.0f"|format((receita_total - investimento_total) / investimento_total * 100) }}%
+      {% else %}—{% endif %}
+    </span>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">CPL Médio (custo por lead)</span>
+    <span class="kpi-valor kpi-receita">
+      {% set total_com_custo = custo_origem.values() | sum(attribute='leads') %}
+      R$ {{ "%.0f"|format(investimento_total / total_com_custo) if total_com_custo else '—' }}
+    </span>
+  </div>
+</div>
+{% endif %}
+
+<!-- Tabela de canais -->
+<div class="card" style="margin-top:0">
+  <h2 class="card-title">Desempenho por Canal de Origem</h2>
+  <table class="leads-table">
+    <thead>
+      <tr>
+        <th>Origem</th>
+        <th>Leads</th>
+        <th>Fechados</th>
+        <th>Conversão</th>
+        <th>Receita</th>
+        <th>Investimento</th>
+        <th>CPL</th>
+        <th>ROI</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for origem, dados in conv_origem.items() | sort(attribute='1.taxa', reverse=True) %}
+      {% set custo_d = custo_origem.get(origem, {}) %}
+      {% set custo_total = custo_d.get('total', 0) %}
+      {% set receita_o = receita_origem.get(origem, 0) %}
+      {% set roi = ((receita_o - custo_total) / custo_total * 100) | round(0) | int if custo_total > 0 else None %}
+      <tr>
+        <td><span class="tag tag-orig">{{ origem }}</span></td>
+        <td style="text-align:center">{{ dados.total }}</td>
+        <td style="text-align:center">{{ dados.fechados }}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
+              <div style="width:{{ dados.taxa }}%;height:100%;background:var(--success);border-radius:3px"></div>
+            </div>
+            <span style="min-width:36px;font-weight:600;color:{% if dados.taxa >= 30 %}var(--success){% elif dados.taxa >= 10 %}var(--copper){% else %}var(--text2){% endif %}">{{ dados.taxa }}%</span>
+          </div>
+        </td>
+        <td>{% if receita_o > 0 %}<span style="color:var(--success);font-weight:600">R$ {{ "%.0f"|format(receita_o) }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if custo_total > 0 %}<span class="text-muted">R$ {{ "%.0f"|format(custo_total) }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if custo_d.get('cpl') %}<span class="text-muted">R$ {{ "%.0f"|format(custo_d.cpl) }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>
+          {% if roi is not none %}
+            <span style="font-weight:700;color:{% if roi >= 100 %}var(--success){% elif roi >= 0 %}var(--copper){% else %}var(--danger){% endif %}">{{ roi }}%</span>
+          {% else %}<span class="text-muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const corPrimaria  = '#FD9451';
+const corVerde     = '#4caf7d';
+const corTexto     = '#E1DCC9';
+const corTexto2    = '#8e9bb5';
+const corBorda     = '#2a3650';
+const corBg3       = '#222d3d';
+
+Chart.defaults.color = corTexto2;
+Chart.defaults.borderColor = corBorda;
+Chart.defaults.font.family = 'Inter, sans-serif';
+Chart.defaults.font.size = 12;
+
+const PALETA = [
+  '#FD9451','#4caf7d','#7eb8f7','#c084fc','#f0a500','#e05c5c',
+  '#34d399','#60a5fa','#f472b6','#a78bfa'
+];
+
+// ── Evolução mensal ──────────────────────────────────────────────────────────
+{% if evolucao %}
+const evolucaoLabels = {{ evolucao.keys() | list | tojson }};
+const evolucaoData   = {{ evolucao.values() | list | tojson }};
+
+new Chart(document.getElementById('chartEvolucao'), {
+  type: 'bar',
+  data: {
+    labels: evolucaoLabels,
+    datasets: [{
+      label: 'Leads captados',
+      data: evolucaoData,
+      backgroundColor: corPrimaria + 'cc',
+      borderColor: corPrimaria,
+      borderWidth: 1,
+      borderRadius: 5,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: corBorda }, ticks: { color: corTexto2 } },
+      y: { grid: { color: corBorda }, ticks: { color: corTexto2, stepSize: 1 }, beginAtZero: true }
+    }
+  }
+});
+{% endif %}
+
+// ── Pizza: Origem ────────────────────────────────────────────────────────────
+{% if por_origem %}
+const origemLabels = {{ por_origem.keys() | list | tojson }};
+const origemData   = {{ por_origem.values() | list | tojson }};
+
+new Chart(document.getElementById('chartOrigem'), {
+  type: 'doughnut',
+  data: {
+    labels: origemLabels,
+    datasets: [{
+      data: origemData,
+      backgroundColor: PALETA.slice(0, origemLabels.length),
+      borderColor: '#1a2130',
+      borderWidth: 3,
+      hoverOffset: 8,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: corTexto, padding: 14, boxWidth: 12, font: { size: 12 } }
+      },
+      tooltip: {
+        callbacks: {
+          label: ctx => {
+            const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+            const pct = ((ctx.parsed / total) * 100).toFixed(1);
+            return ` ${ctx.label}: ${ctx.parsed} leads (${pct}%)`;
+          }
+        }
+      }
+    }
+  }
+});
+{% endif %}
+
+// ── Pizza: Segmento ──────────────────────────────────────────────────────────
+{% if por_segmento %}
+const segLabels = {{ por_segmento.keys() | list | tojson }};
+const segData   = {{ por_segmento.values() | list | tojson }};
+
+new Chart(document.getElementById('chartSegmento'), {
+  type: 'doughnut',
+  data: {
+    labels: segLabels,
+    datasets: [{
+      data: segData,
+      backgroundColor: PALETA.slice(0, segLabels.length).reverse(),
+      borderColor: '#1a2130',
+      borderWidth: 3,
+      hoverOffset: 8,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: corTexto, padding: 14, boxWidth: 12, font: { size: 12 } }
+      },
+      tooltip: {
+        callbacks: {
+          label: ctx => {
+            const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+            const pct = ((ctx.parsed / total) * 100).toFixed(1);
+            return ` ${ctx.label}: ${ctx.parsed} leads (${pct}%)`;
+          }
+        }
+      }
+    }
+  }
+});
+{% endif %}
+</script>
+{% endblock %}
