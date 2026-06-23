@@ -1,1 +1,1 @@
-web: source .venv/bin/activate && gunicorn app:app --preload
+web: gunicorn app:app --bind 0.0.0.0:$PORT
