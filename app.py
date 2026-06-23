@@ -24,13 +24,14 @@ TIPOS_INTERACAO = ["WhatsApp", "Ligação", "E-mail", "Reunião", "Presencial", 
 # ─── Camada de compatibilidade SQLite ↔ PostgreSQL ───────────────────────────
 
 _SQLITE_ADAPT = [
-    ("NOW() - INTERVAL '30 days'",        "datetime('now', '-30 days', 'localtime')"),
-    ("NOW() - INTERVAL '12 months'",      "datetime('now', '-12 months', 'localtime')"),
-    ("DEFAULT NOW()",                     "DEFAULT (datetime('now', 'localtime'))"),
-    ("TO_CHAR(criado_em, 'YYYY-MM')",     "strftime('%Y-%m', criado_em)"),
-    ("NOW()",                             "datetime('now', 'localtime')"),
-    ("%s",                                "?"),
-    ("SERIAL PRIMARY KEY",                "INTEGER PRIMARY KEY AUTOINCREMENT"),
+    ("criado_em::timestamp >= NOW() - INTERVAL '30 days'",   "criado_em >= datetime('now', '-30 days', 'localtime')"),
+    ("criado_em::timestamp >= NOW() - INTERVAL '12 months'", "criado_em >= datetime('now', '-12 months', 'localtime')"),
+    ("TO_CHAR(criado_em::timestamp, 'YYYY-MM')",             "strftime('%Y-%m', criado_em)"),
+    ("DEFAULT NOW()::text",                                  "DEFAULT (datetime('now', 'localtime'))"),
+    ("NOW()::text",                                          "datetime('now', 'localtime')"),
+    ("NOW()",                                                "datetime('now', 'localtime')"),
+    ("%s",                                                   "?"),
+    ("SERIAL PRIMARY KEY",                                   "INTEGER PRIMARY KEY AUTOINCREMENT"),
 ]
 
 def _adapt(query):
@@ -131,8 +132,8 @@ def init_db():
             custo_aquisicao REAL,
             lembrete_em    TEXT,
             lembrete_nota  TEXT,
-            criado_em      TEXT DEFAULT NOW(),
-            atualizado_em  TEXT DEFAULT NOW()
+            criado_em      TEXT DEFAULT NOW()::text,
+            atualizado_em  TEXT DEFAULT NOW()::text
         )
     """)
     conn.execute("""
@@ -141,7 +142,7 @@ def init_db():
             lead_id   INTEGER NOT NULL,
             tipo      TEXT NOT NULL,
             anotacao  TEXT,
-            data_hora TEXT DEFAULT NOW(),
+            data_hora TEXT DEFAULT NOW()::text,
             FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
         )
     """)
@@ -338,7 +339,7 @@ def dashboard():
         por_origem[r["origem"]] = r["n"]
 
     ultimos_30 = conn.execute(
-        "SELECT COUNT(*) FROM leads WHERE criado_em >= NOW() - INTERVAL '30 days'"
+        "SELECT COUNT(*) FROM leads WHERE criado_em::timestamp >= NOW() - INTERVAL '30 days'"
     ).fetchone()[0]
 
     atrasados = []
@@ -463,7 +464,7 @@ def editar_lead(lead_id):
         UPDATE leads SET nome=%s, whatsapp=%s, email=%s, segmento=%s, origem=%s,
         observacoes=%s, valor_servico=%s, data_consulta=%s, hora_consulta=%s,
         motivo_perda=%s, custo_aquisicao=%s, lembrete_em=%s, lembrete_nota=%s,
-        atualizado_em=NOW()
+        atualizado_em=NOW()::text
         WHERE id=%s
     """, (d["nome"], d["whatsapp"], d.get("email"), d.get("segmento"), d.get("origem"),
           d.get("observacoes"),
@@ -555,7 +556,7 @@ def api_mover():
         return jsonify({"ok": False, "erro": erro})
 
     conn.execute(
-        "UPDATE leads SET etapa=%s, atualizado_em=NOW() WHERE id=%s", (nova_etapa, lead_id)
+        "UPDATE leads SET etapa=%s, atualizado_em=NOW()::text WHERE id=%s", (nova_etapa, lead_id)
     )
     conn.commit()
     conn.close()
@@ -615,8 +616,8 @@ def relatorios():
 
     evolucao = {}
     for r in conn.execute("""
-        SELECT TO_CHAR(criado_em, 'YYYY-MM') mes, COUNT(*) n
-        FROM leads WHERE criado_em >= NOW() - INTERVAL '12 months'
+        SELECT TO_CHAR(criado_em::timestamp, 'YYYY-MM') mes, COUNT(*) n
+        FROM leads WHERE criado_em::timestamp >= NOW() - INTERVAL '12 months'
         GROUP BY mes ORDER BY mes
     """).fetchall():
         evolucao[r["mes"]] = r["n"]
