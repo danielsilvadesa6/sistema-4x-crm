@@ -26,6 +26,13 @@
            ondragstart="onDragStart(event)"
            onclick="window.location='{{ url_for('ver_lead', lead_id=card.id) }}'">
         <div class="card-nome">{{ card.nome }}</div>
+        {% if card.whatsapp_link %}
+        <a href="{{ card.whatsapp_link }}" target="_blank" rel="noopener" class="btn-whatsapp"
+           onclick="event.stopPropagation()">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-1.746-.873-2.892-1.56-4.043-3.538-.306-.529.306-.49.876-1.633.099-.198.05-.371-.05-.52-.099-.149-.669-1.611-.916-2.207-.247-.595-.5-.51-.67-.51-.173 0-.371-.026-.57-.026-.198 0-.52.074-.792.372-.273.297-1.04.965-1.04 2.354 0 1.39.785 2.701 1.09 3.029.297.297 2.32 3.692 5.643 4.985 2.797 1.107 2.797.74 3.314.69.516-.05 1.659-.683 1.906-1.342.247-.66.247-1.219.173-1.342-.074-.124-.272-.198-.57-.347z"/></svg>
+          WhatsApp
+        </a>
+        {% endif %}
         <div class="card-tags">
           <span class="tag tag-seg">{{ card.segmento }}</span>
           <span class="tag tag-orig">{{ card.origem }}</span>

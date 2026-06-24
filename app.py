@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response
 import sqlite3
 import os
+import re
 from datetime import datetime, timedelta
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
@@ -301,6 +302,15 @@ def seed_data(conn):
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+def whatsapp_link(numero):
+    if not numero:
+        return None
+    digitos = re.sub(r"\D", "", numero)
+    if not digitos:
+        return None
+    return f"https://wa.me/55{digitos}"
+
+
 def ultima_interacao(lead_id, conn):
     row = conn.execute(
         "SELECT data_hora FROM interacoes WHERE lead_id=%s ORDER BY data_hora DESC LIMIT 1",
@@ -377,7 +387,7 @@ def pipeline():
             cards.append({
                 "id": l["id"], "nome": l["nome"], "segmento": l["segmento"],
                 "origem": l["origem"], "dias_sem_contato": d, "alerta": d > 7,
-                "etapa": l["etapa"]
+                "etapa": l["etapa"], "whatsapp_link": whatsapp_link(l["whatsapp"])
             })
         colunas[e] = cards
     conn.close()
@@ -453,7 +463,8 @@ def ver_lead(lead_id):
                            dias_sem_contato=d, tipos_interacao=TIPOS_INTERACAO,
                            etapas=ETAPAS, segmentos=SEGMENTOS, origens=ORIGENS,
                            now_str=datetime.now().strftime("%Y-%m-%dT%H:%M"),
-                           hoje=datetime.now().strftime("%Y-%m-%d"))
+                           hoje=datetime.now().strftime("%Y-%m-%d"),
+                           whatsapp_link=whatsapp_link(lead["whatsapp"]))
 
 
 @app.route("/lead/<int:lead_id>/editar", methods=["POST"])
