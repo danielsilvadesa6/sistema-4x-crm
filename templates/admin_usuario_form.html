@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar Usuário' if usuario else 'Novo Usuário' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="{{ url_for('admin_usuarios') }}" class="back-link">← Usuários</a>
+    <h1>{{ 'Editar Usuário' if usuario else 'Novo Usuário' }}</h1>
+  </div>
+</div>
+
+<div class="card" style="max-width:480px">
+  {% if erro %}
+  <div class="alert-banner" style="margin-bottom:16px">{{ erro }}</div>
+  {% endif %}
+  <form method="post">
+    <div class="form-group">
+      <label>Nome completo *</label>
+      <input type="text" name="nome" required class="input" value="{{ usuario.nome if usuario else '' }}">
+    </div>
+    <div class="form-group">
+      <label>E-mail *</label>
+      <input type="email" name="email" required class="input" value="{{ usuario.email if usuario else '' }}">
+    </div>
+    <div class="form-group">
+      <label>Perfil</label>
+      <select name="perfil" class="input">
+        <option value="usuario" {% if usuario and usuario.perfil == 'usuario' %}selected{% endif %}>Usuário</option>
+        <option value="admin" {% if usuario and usuario.perfil == 'admin' %}selected{% endif %}>Admin</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>{{ 'Nova senha (deixe em branco para manter)' if usuario else 'Senha *' }}</label>
+      <input type="password" name="senha" {% if not usuario %}required{% endif %} class="input" placeholder="••••••••">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn btn-primary">Salvar</button>
+      <a href="{{ url_for('admin_usuarios') }}" class="btn btn-ghost">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

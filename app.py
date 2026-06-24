@@ -1,14 +1,27 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, session, g
 import sqlite3
 import os
 import re
+import bcrypt
+from functools import wraps
 from datetime import datetime, timedelta
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
+from flask_session import Session
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH  = os.path.join(BASE_DIR, "banco.db")
+
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "sistema-4x-crm-dev-secret-key")
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = os.path.join(BASE_DIR, ".flask_session")
+app.config["SESSION_PERMANENT"] = True
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
+Session(app)
+
+ADMIN_EMAIL_PADRAO = "daniel@danielsaconsultoria.com.br"
+ADMIN_SENHA_PADRAO = "Admin@4x2025"
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 USE_PG = bool(DATABASE_URL)
@@ -147,6 +160,17 @@ def init_db():
             FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id        SERIAL PRIMARY KEY,
+            nome      TEXT NOT NULL,
+            email     TEXT NOT NULL UNIQUE,
+            senha     TEXT NOT NULL,
+            perfil    TEXT DEFAULT 'usuario',
+            ativo     INTEGER DEFAULT 1,
+            criado_em TEXT DEFAULT NOW()::text
+        )
+    """)
     conn.commit()
 
     # Migração de banco existente: adiciona colunas novas se não existirem
@@ -157,15 +181,32 @@ def init_db():
     else:
         colunas = [r[1] for r in conn.execute("PRAGMA table_info(leads)").fetchall()]
 
-    for col, tipo in [("custo_aquisicao", "REAL"), ("lembrete_em", "TEXT"), ("lembrete_nota", "TEXT")]:
+    for col, tipo in [("custo_aquisicao", "REAL"), ("lembrete_em", "TEXT"), ("lembrete_nota", "TEXT"),
+                       ("usuario_id", "INTEGER")]:
         if col not in colunas:
             conn.execute(f"ALTER TABLE leads ADD COLUMN {col} {tipo}")
     conn.commit()
+
+    # Cria o usuário admin padrão se não existir
+    admin = conn.execute("SELECT id FROM usuarios WHERE email=%s", (ADMIN_EMAIL_PADRAO,)).fetchone()
+    if not admin:
+        senha_hash = bcrypt.hashpw(ADMIN_SENHA_PADRAO.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        conn.execute(
+            "INSERT INTO usuarios (nome, email, senha, perfil, ativo) VALUES (%s,%s,%s,%s,%s)",
+            ("Daniel", ADMIN_EMAIL_PADRAO, senha_hash, "admin", 1)
+        )
+        conn.commit()
+        admin = conn.execute("SELECT id FROM usuarios WHERE email=%s", (ADMIN_EMAIL_PADRAO,)).fetchone()
+    admin_id = admin["id"]
 
     # Dados de exemplo apenas se o banco estiver vazio
     if conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0] == 0:
         seed_data(conn)
         conn.commit()
+
+    # Vincula leads órfãos (sem usuario_id) ao admin, preservando dados existentes
+    conn.execute("UPDATE leads SET usuario_id=%s WHERE usuario_id IS NULL", (admin_id,))
+    conn.commit()
 
     conn.close()
 
@@ -300,6 +341,45 @@ def seed_data(conn):
     conn.commit()
 
 
+# ─── Autenticação ─────────────────────────────────────────────────────────────
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login", next=request.path))
+        if session.get("perfil") != "admin":
+            return "Acesso restrito a administradores", 403
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.before_request
+def carregar_usuario_atual():
+    g.user = None
+    if session.get("user_id"):
+        g.user = {
+            "id": session["user_id"],
+            "nome": session.get("nome"),
+            "email": session.get("email"),
+            "perfil": session.get("perfil"),
+        }
+
+
+@app.context_processor
+def injetar_usuario():
+    return {"current_user": g.get("user")}
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def whatsapp_link(numero):
@@ -335,25 +415,68 @@ def index():
     return redirect(url_for("dashboard"))
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
+
+    erro = None
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        senha = request.form.get("senha", "")
+        conn = get_db()
+        usuario = conn.execute("SELECT * FROM usuarios WHERE email=%s", (email,)).fetchone()
+        conn.close()
+
+        if not usuario or not usuario["ativo"]:
+            erro = "E-mail ou senha inválidos."
+        elif not bcrypt.checkpw(senha.encode("utf-8"), usuario["senha"].encode("utf-8")):
+            erro = "E-mail ou senha inválidos."
+        else:
+            session.clear()
+            session.permanent = True
+            session["user_id"] = usuario["id"]
+            session["nome"]    = usuario["nome"]
+            session["email"]   = usuario["email"]
+            session["perfil"]  = usuario["perfil"]
+            destino = request.args.get("next") or url_for("dashboard")
+            return redirect(destino)
+
+    return render_template("login.html", erro=erro)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/dashboard")
+@login_required
 def dashboard():
+    uid = session["user_id"]
     conn = get_db()
     total_por_etapa = {}
     for e in ETAPAS:
         total_por_etapa[e] = conn.execute(
-            "SELECT COUNT(*) FROM leads WHERE etapa=%s", (e,)
+            "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND etapa=%s", (uid, e)
         ).fetchone()[0]
 
     por_origem = {}
-    for r in conn.execute("SELECT origem, COUNT(*) as n FROM leads GROUP BY origem").fetchall():
+    for r in conn.execute(
+        "SELECT origem, COUNT(*) as n FROM leads WHERE usuario_id=%s GROUP BY origem", (uid,)
+    ).fetchall():
         por_origem[r["origem"]] = r["n"]
 
     ultimos_30 = conn.execute(
-        "SELECT COUNT(*) FROM leads WHERE criado_em::timestamp >= NOW() - INTERVAL '30 days'"
+        "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND criado_em::timestamp >= NOW() - INTERVAL '30 days'",
+        (uid,)
     ).fetchone()[0]
 
     atrasados = []
-    for l in conn.execute("SELECT * FROM leads WHERE etapa NOT IN ('Fechado','Perdido')").fetchall():
+    for l in conn.execute(
+        "SELECT * FROM leads WHERE usuario_id=%s AND etapa NOT IN ('Fechado','Perdido')", (uid,)
+    ).fetchall():
         d = dias_sem_contato(l["id"], l["criado_em"], conn)
         if d > 7:
             atrasados.append({"nome": l["nome"], "etapa": l["etapa"], "dias": d, "id": l["id"]})
@@ -362,10 +485,10 @@ def dashboard():
     lembretes = [dict(r) for r in conn.execute("""
         SELECT id, nome, etapa, lembrete_em, lembrete_nota
         FROM leads
-        WHERE lembrete_em IS NOT NULL AND lembrete_em <= %s
+        WHERE usuario_id=%s AND lembrete_em IS NOT NULL AND lembrete_em <= %s
           AND etapa NOT IN ('Fechado','Perdido')
         ORDER BY lembrete_em ASC
-    """, (hoje,)).fetchall()]
+    """, (uid, hoje)).fetchall()]
 
     conn.close()
     return render_template("dashboard.html",
@@ -375,13 +498,15 @@ def dashboard():
 
 
 @app.route("/pipeline")
+@login_required
 def pipeline():
+    uid = session["user_id"]
     conn = get_db()
     colunas = {}
     for e in ETAPAS:
         cards = []
         for l in conn.execute(
-            "SELECT * FROM leads WHERE etapa=%s ORDER BY atualizado_em DESC", (e,)
+            "SELECT * FROM leads WHERE usuario_id=%s AND etapa=%s ORDER BY atualizado_em DESC", (uid, e)
         ).fetchall():
             d = dias_sem_contato(l["id"], l["criado_em"], conn)
             cards.append({
@@ -395,15 +520,17 @@ def pipeline():
 
 
 @app.route("/leads")
+@login_required
 def leads():
+    uid = session["user_id"]
     conn = get_db()
     q        = request.args.get("q", "")
     etapa    = request.args.get("etapa", "")
     origem   = request.args.get("origem", "")
     segmento = request.args.get("segmento", "")
 
-    sql    = "SELECT * FROM leads WHERE 1=1"
-    params = []
+    sql    = "SELECT * FROM leads WHERE usuario_id=%s"
+    params = [uid]
     if q:
         sql += " AND (nome LIKE %s OR whatsapp LIKE %s)"
         params += [f"%{q}%", f"%{q}%"]
@@ -425,20 +552,28 @@ def leads():
                            filtros={"q": q, "etapa": etapa, "origem": origem, "segmento": segmento})
 
 
+def lead_do_usuario(lead_id, uid, conn):
+    return conn.execute(
+        "SELECT * FROM leads WHERE id=%s AND usuario_id=%s", (lead_id, uid)
+    ).fetchone()
+
+
 @app.route("/lead/novo", methods=["GET", "POST"])
+@login_required
 def novo_lead():
     if request.method == "POST":
         d = request.form
         conn = get_db()
         conn.execute("""
             INSERT INTO leads (nome, whatsapp, email, segmento, origem, observacoes,
-                               custo_aquisicao, lembrete_em, lembrete_nota)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                               custo_aquisicao, lembrete_em, lembrete_nota, usuario_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (d["nome"], d["whatsapp"], d.get("email"), d.get("segmento"),
               d.get("origem"), d.get("observacoes"),
               d.get("custo_aquisicao") or None,
               d.get("lembrete_em")     or None,
-              d.get("lembrete_nota")   or None))
+              d.get("lembrete_nota")   or None,
+              session["user_id"]))
         conn.commit()
         conn.close()
         return redirect(url_for("pipeline"))
@@ -447,9 +582,10 @@ def novo_lead():
 
 
 @app.route("/lead/<int:lead_id>")
+@login_required
 def ver_lead(lead_id):
     conn = get_db()
-    lead = conn.execute("SELECT * FROM leads WHERE id=%s", (lead_id,)).fetchone()
+    lead = lead_do_usuario(lead_id, session["user_id"], conn)
     if not lead:
         conn.close()
         return "Lead não encontrado", 404
@@ -468,9 +604,13 @@ def ver_lead(lead_id):
 
 
 @app.route("/lead/<int:lead_id>/editar", methods=["POST"])
+@login_required
 def editar_lead(lead_id):
-    d = request.form
     conn = get_db()
+    if not lead_do_usuario(lead_id, session["user_id"], conn):
+        conn.close()
+        return "Lead não encontrado", 404
+    d = request.form
     conn.execute("""
         UPDATE leads SET nome=%s, whatsapp=%s, email=%s, segmento=%s, origem=%s,
         observacoes=%s, valor_servico=%s, data_consulta=%s, hora_consulta=%s,
@@ -493,10 +633,14 @@ def editar_lead(lead_id):
 
 
 @app.route("/lead/<int:lead_id>/interacao", methods=["POST"])
+@login_required
 def nova_interacao(lead_id):
+    conn = get_db()
+    if not lead_do_usuario(lead_id, session["user_id"], conn):
+        conn.close()
+        return "Lead não encontrado", 404
     d = request.form
     data_hora = d.get("data_hora") or datetime.now().strftime("%Y-%m-%d %H:%M")
-    conn = get_db()
     conn.execute(
         "INSERT INTO interacoes (lead_id, tipo, anotacao, data_hora) VALUES (%s,%s,%s,%s)",
         (lead_id, d["tipo"], d.get("anotacao"), data_hora)
@@ -508,8 +652,12 @@ def nova_interacao(lead_id):
 
 
 @app.route("/lead/<int:lead_id>/excluir", methods=["POST"])
+@login_required
 def excluir_lead(lead_id):
     conn = get_db()
+    if not lead_do_usuario(lead_id, session["user_id"], conn):
+        conn.close()
+        return "Lead não encontrado", 404
     conn.execute("DELETE FROM leads WHERE id=%s", (lead_id,))
     conn.commit()
     conn.close()
@@ -517,8 +665,12 @@ def excluir_lead(lead_id):
 
 
 @app.route("/lead/<int:lead_id>/lembrete/concluir", methods=["POST"])
+@login_required
 def concluir_lembrete(lead_id):
     conn = get_db()
+    if not lead_do_usuario(lead_id, session["user_id"], conn):
+        conn.close()
+        return "Lead não encontrado", 404
     conn.execute("UPDATE leads SET lembrete_em=NULL, lembrete_nota=NULL WHERE id=%s", (lead_id,))
     conn.commit()
     conn.close()
@@ -529,6 +681,7 @@ def concluir_lembrete(lead_id):
 # ─── API Kanban ───────────────────────────────────────────────────────────────
 
 @app.route("/api/mover", methods=["POST"])
+@login_required
 def api_mover():
     data      = request.get_json()
     lead_id   = data.get("lead_id")
@@ -538,7 +691,7 @@ def api_mover():
         return jsonify({"ok": False, "erro": "Etapa inválida"}), 400
 
     conn = get_db()
-    lead = conn.execute("SELECT * FROM leads WHERE id=%s", (lead_id,)).fetchone()
+    lead = lead_do_usuario(lead_id, session["user_id"], conn)
     if not lead:
         conn.close()
         return jsonify({"ok": False, "erro": "Lead não encontrado"}), 404
@@ -575,9 +728,10 @@ def api_mover():
 
 
 @app.route("/api/lead/<int:lead_id>")
+@login_required
 def api_lead(lead_id):
     conn = get_db()
-    lead = conn.execute("SELECT * FROM leads WHERE id=%s", (lead_id,)).fetchone()
+    lead = lead_do_usuario(lead_id, session["user_id"], conn)
     conn.close()
     if not lead:
         return jsonify({}), 404
@@ -587,26 +741,36 @@ def api_lead(lead_id):
 # ─── Relatórios ───────────────────────────────────────────────────────────────
 
 @app.route("/relatorios")
+@login_required
 def relatorios():
+    uid = session["user_id"]
     conn = get_db()
 
     por_origem = {}
-    for r in conn.execute("SELECT origem, COUNT(*) n FROM leads GROUP BY origem ORDER BY n DESC"):
+    for r in conn.execute(
+        "SELECT origem, COUNT(*) n FROM leads WHERE usuario_id=%s GROUP BY origem ORDER BY n DESC", (uid,)
+    ):
         por_origem[r["origem"] or "Não informado"] = r["n"]
 
     por_segmento = {}
-    for r in conn.execute("SELECT segmento, COUNT(*) n FROM leads GROUP BY segmento ORDER BY n DESC"):
+    for r in conn.execute(
+        "SELECT segmento, COUNT(*) n FROM leads WHERE usuario_id=%s GROUP BY segmento ORDER BY n DESC", (uid,)
+    ):
         por_segmento[r["segmento"] or "Não informado"] = r["n"]
 
     funil = {}
     for e in ETAPAS:
-        funil[e] = conn.execute("SELECT COUNT(*) FROM leads WHERE etapa=%s", (e,)).fetchone()[0]
+        funil[e] = conn.execute(
+            "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND etapa=%s", (uid, e)
+        ).fetchone()[0]
 
     conv_origem = {}
     for origem in por_origem:
-        total   = conn.execute("SELECT COUNT(*) FROM leads WHERE origem=%s", (origem,)).fetchone()[0]
+        total   = conn.execute(
+            "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND origem=%s", (uid, origem)
+        ).fetchone()[0]
         fechados = conn.execute(
-            "SELECT COUNT(*) FROM leads WHERE origem=%s AND etapa='Fechado'", (origem,)
+            "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND origem=%s AND etapa='Fechado'", (uid, origem)
         ).fetchone()[0]
         conv_origem[origem] = {
             "total": total, "fechados": fechados,
@@ -616,25 +780,28 @@ def relatorios():
     receita_origem = {}
     for r in conn.execute("""
         SELECT origem, SUM(valor_servico) total
-        FROM leads WHERE etapa='Fechado' AND valor_servico IS NOT NULL GROUP BY origem
-    """):
+        FROM leads WHERE usuario_id=%s AND etapa='Fechado' AND valor_servico IS NOT NULL GROUP BY origem
+    """, (uid,)):
         receita_origem[r["origem"] or "Não informado"] = r["total"] or 0
 
     receita_total  = sum(receita_origem.values())
     ticket_medio   = conn.execute(
-        "SELECT AVG(valor_servico) FROM leads WHERE etapa='Fechado' AND valor_servico IS NOT NULL"
+        "SELECT AVG(valor_servico) FROM leads WHERE usuario_id=%s AND etapa='Fechado' AND valor_servico IS NOT NULL",
+        (uid,)
     ).fetchone()[0] or 0
 
     evolucao = {}
     for r in conn.execute("""
         SELECT TO_CHAR(criado_em::timestamp, 'YYYY-MM') mes, COUNT(*) n
-        FROM leads WHERE criado_em::timestamp >= NOW() - INTERVAL '12 months'
+        FROM leads WHERE usuario_id=%s AND criado_em::timestamp >= NOW() - INTERVAL '12 months'
         GROUP BY mes ORDER BY mes
-    """).fetchall():
+    """, (uid,)).fetchall():
         evolucao[r["mes"]] = r["n"]
 
     tempos = []
-    for r in conn.execute("SELECT criado_em, atualizado_em FROM leads WHERE etapa='Fechado'").fetchall():
+    for r in conn.execute(
+        "SELECT criado_em, atualizado_em FROM leads WHERE usuario_id=%s AND etapa='Fechado'", (uid,)
+    ).fetchall():
         try:
             c = datetime.strptime(str(r["criado_em"])[:19],    "%Y-%m-%d %H:%M:%S")
             f = datetime.strptime(str(r["atualizado_em"])[:19], "%Y-%m-%d %H:%M:%S")
@@ -643,15 +810,17 @@ def relatorios():
             pass
     tempo_medio_fechamento = round(sum(tempos) / len(tempos), 1) if tempos else 0
 
-    total_leads   = conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
+    total_leads   = conn.execute(
+        "SELECT COUNT(*) FROM leads WHERE usuario_id=%s", (uid,)
+    ).fetchone()[0]
     total_fechados = funil.get("Fechado", 0)
     taxa_conv_geral = round(total_fechados / total_leads * 100, 1) if total_leads else 0
 
     custo_origem = {}
     for r in conn.execute("""
         SELECT origem, SUM(custo_aquisicao) total_custo, COUNT(*) total_leads
-        FROM leads WHERE custo_aquisicao IS NOT NULL GROUP BY origem
-    """):
+        FROM leads WHERE usuario_id=%s AND custo_aquisicao IS NOT NULL GROUP BY origem
+    """, (uid,)):
         custo_origem[r["origem"] or "Não informado"] = {
             "total": r["total_custo"] or 0,
             "leads": r["total_leads"],
@@ -681,24 +850,34 @@ def relatorios():
 
 
 @app.route("/relatorios/exportar-pdf")
+@login_required
 def exportar_pdf():
+    uid = session["user_id"]
     conn = get_db()
-    total_leads    = conn.execute("SELECT COUNT(*) FROM leads").fetchone()[0]
-    total_fechados = conn.execute("SELECT COUNT(*) FROM leads WHERE etapa='Fechado'").fetchone()[0]
+    total_leads    = conn.execute(
+        "SELECT COUNT(*) FROM leads WHERE usuario_id=%s", (uid,)
+    ).fetchone()[0]
+    total_fechados = conn.execute(
+        "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND etapa='Fechado'", (uid,)
+    ).fetchone()[0]
     taxa_conv      = round(total_fechados / total_leads * 100, 1) if total_leads else 0
     receita_total  = conn.execute(
-        "SELECT COALESCE(SUM(valor_servico),0) FROM leads WHERE etapa='Fechado'"
+        "SELECT COALESCE(SUM(valor_servico),0) FROM leads WHERE usuario_id=%s AND etapa='Fechado'", (uid,)
     ).fetchone()[0] or 0
     ticket_medio   = conn.execute(
-        "SELECT COALESCE(AVG(valor_servico),0) FROM leads WHERE etapa='Fechado' AND valor_servico IS NOT NULL"
+        "SELECT COALESCE(AVG(valor_servico),0) FROM leads WHERE usuario_id=%s AND etapa='Fechado' AND valor_servico IS NOT NULL",
+        (uid,)
     ).fetchone()[0] or 0
     invest_total   = conn.execute(
-        "SELECT COALESCE(SUM(custo_aquisicao),0) FROM leads WHERE custo_aquisicao IS NOT NULL"
+        "SELECT COALESCE(SUM(custo_aquisicao),0) FROM leads WHERE usuario_id=%s AND custo_aquisicao IS NOT NULL",
+        (uid,)
     ).fetchone()[0] or 0
 
     funil = {}
     for e in ETAPAS:
-        funil[e] = conn.execute("SELECT COUNT(*) FROM leads WHERE etapa=%s", (e,)).fetchone()[0]
+        funil[e] = conn.execute(
+            "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND etapa=%s", (uid, e)
+        ).fetchone()[0]
 
     canais = conn.execute("""
         SELECT l.origem,
@@ -706,8 +885,8 @@ def exportar_pdf():
                SUM(CASE WHEN l.etapa='Fechado' THEN 1 ELSE 0 END) fechados,
                COALESCE(SUM(CASE WHEN l.etapa='Fechado' THEN l.valor_servico ELSE 0 END),0) receita,
                COALESCE(SUM(l.custo_aquisicao),0) custo
-        FROM leads l GROUP BY l.origem ORDER BY total DESC
-    """).fetchall()
+        FROM leads l WHERE l.usuario_id=%s GROUP BY l.origem ORDER BY total DESC
+    """, (uid,)).fetchall()
     conn.close()
 
     pdf = FPDF()
@@ -822,6 +1001,112 @@ def exportar_pdf():
     resp.headers["Content-Type"] = "application/pdf"
     resp.headers["Content-Disposition"] = f"attachment; filename=relatorio_4xcrm_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
     return resp
+
+
+# ─── Painel Admin ──────────────────────────────────────────────────────────────
+
+@app.route("/admin")
+@admin_required
+def admin_usuarios():
+    conn = get_db()
+    usuarios = conn.execute("""
+        SELECT u.id, u.nome, u.email, u.perfil, u.ativo, u.criado_em,
+               (SELECT COUNT(*) FROM leads l WHERE l.usuario_id = u.id) AS total_leads
+        FROM usuarios u ORDER BY u.criado_em ASC
+    """).fetchall()
+    conn.close()
+    return render_template("admin_usuarios.html", usuarios=[dict(u) for u in usuarios])
+
+
+@app.route("/admin/usuario/novo", methods=["GET", "POST"])
+@admin_required
+def admin_novo_usuario():
+    erro = None
+    if request.method == "POST":
+        d = request.form
+        nome   = d.get("nome", "").strip()
+        email  = d.get("email", "").strip().lower()
+        senha  = d.get("senha", "")
+        perfil = d.get("perfil") if d.get("perfil") in ("admin", "usuario") else "usuario"
+
+        if not nome or not email or not senha:
+            erro = "Preencha nome, e-mail e senha."
+        else:
+            conn = get_db()
+            existente = conn.execute("SELECT id FROM usuarios WHERE email=%s", (email,)).fetchone()
+            if existente:
+                erro = "Já existe um usuário com este e-mail."
+                conn.close()
+            else:
+                senha_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                conn.execute(
+                    "INSERT INTO usuarios (nome, email, senha, perfil, ativo) VALUES (%s,%s,%s,%s,%s)",
+                    (nome, email, senha_hash, perfil, 1)
+                )
+                conn.commit()
+                conn.close()
+                return redirect(url_for("admin_usuarios"))
+    return render_template("admin_usuario_form.html", usuario=None, erro=erro)
+
+
+@app.route("/admin/usuario/<int:usuario_id>/editar", methods=["GET", "POST"])
+@admin_required
+def admin_editar_usuario(usuario_id):
+    conn = get_db()
+    usuario = conn.execute("SELECT * FROM usuarios WHERE id=%s", (usuario_id,)).fetchone()
+    if not usuario:
+        conn.close()
+        return "Usuário não encontrado", 404
+
+    erro = None
+    if request.method == "POST":
+        d = request.form
+        nome   = d.get("nome", "").strip()
+        email  = d.get("email", "").strip().lower()
+        senha  = d.get("senha", "")
+        perfil = d.get("perfil") if d.get("perfil") in ("admin", "usuario") else "usuario"
+
+        if not nome or not email:
+            erro = "Preencha nome e e-mail."
+        else:
+            duplicado = conn.execute(
+                "SELECT id FROM usuarios WHERE email=%s AND id<>%s", (email, usuario_id)
+            ).fetchone()
+            if duplicado:
+                erro = "Já existe outro usuário com este e-mail."
+            else:
+                if senha:
+                    senha_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                    conn.execute(
+                        "UPDATE usuarios SET nome=%s, email=%s, perfil=%s, senha=%s WHERE id=%s",
+                        (nome, email, perfil, senha_hash, usuario_id)
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE usuarios SET nome=%s, email=%s, perfil=%s WHERE id=%s",
+                        (nome, email, perfil, usuario_id)
+                    )
+                conn.commit()
+                conn.close()
+                return redirect(url_for("admin_usuarios"))
+
+    conn.close()
+    return render_template("admin_usuario_form.html", usuario=dict(usuario), erro=erro)
+
+
+@app.route("/admin/usuario/<int:usuario_id>/desativar", methods=["POST"])
+@admin_required
+def admin_desativar_usuario(usuario_id):
+    if usuario_id == session["user_id"]:
+        return "Você não pode desativar o próprio usuário", 400
+    conn = get_db()
+    usuario = conn.execute("SELECT ativo FROM usuarios WHERE id=%s", (usuario_id,)).fetchone()
+    if usuario:
+        novo_status = 0 if usuario["ativo"] else 1
+        conn.execute("UPDATE usuarios SET ativo=%s WHERE id=%s", (novo_status, usuario_id))
+        conn.commit()
+    conn.close()
+    return redirect(url_for("admin_usuarios"))
 
 
 init_db()

@@ -38,7 +38,26 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
           Novo Lead
         </a>
+        {% if current_user and current_user.perfil == 'admin' %}
+        <a href="{{ url_for('admin_usuarios') }}" class="nav-item {% if request.endpoint and request.endpoint.startswith('admin_') %}active{% endif %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+          Usuários
+        </a>
+        {% endif %}
       </nav>
+
+      {% if current_user %}
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <strong>{{ current_user.nome }}</strong>
+          {{ current_user.email }}
+        </div>
+        <a href="{{ url_for('logout') }}" class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </a>
+      </div>
+      {% endif %}
     </aside>
 
     <!-- Conteúdo principal -->

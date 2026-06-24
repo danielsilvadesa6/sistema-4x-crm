@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Usuários{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Usuários</h1>
+  <a href="{{ url_for('admin_novo_usuario') }}" class="btn btn-primary">+ Novo Usuário</a>
+</div>
+
+<div class="table-wrap">
+  <table class="leads-table">
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>E-mail</th>
+        <th>Perfil</th>
+        <th>Status</th>
+        <th>Leads</th>
+        <th>Criado em</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in usuarios %}
+      <tr>
+        <td>{{ u.nome }}</td>
+        <td>{{ u.email }}</td>
+        <td><span class="badge-perfil {% if u.perfil == 'admin' %}badge-admin{% else %}badge-usuario{% endif %}">{{ u.perfil }}</span></td>
+        <td><span class="badge-perfil {% if u.ativo %}badge-ativo{% else %}badge-inativo{% endif %}">{{ 'Ativo' if u.ativo else 'Inativo' }}</span></td>
+        <td>{{ u.total_leads }}</td>
+        <td><span class="text-muted">{{ u.criado_em[:10] if u.criado_em else '—' }}</span></td>
+        <td style="display:flex;gap:6px">
+          <a href="{{ url_for('admin_editar_usuario', usuario_id=u.id) }}" class="btn btn-sm">Editar</a>
+          {% if u.id != current_user.id %}
+          <form method="post" action="{{ url_for('admin_desativar_usuario', usuario_id=u.id) }}">
+            <button type="submit" class="btn btn-sm {% if u.ativo %}btn-danger{% endif %}">
+              {{ 'Desativar' if u.ativo else 'Reativar' }}
+            </button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-msg">Nenhum usuário cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

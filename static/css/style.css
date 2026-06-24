@@ -646,4 +646,47 @@ textarea.input { resize: vertical; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Login ───────────────────────────────────────────────── */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 20px;
+}
+.login-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px;
+  width: 100%;
+  max-width: 380px;
+}
+
+/* ── Sidebar: footer / logout ───────────────────────────────*/
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 12px 0;
+  border-top: 1px solid var(--border);
+}
+.sidebar-user {
+  padding: 0 8px 10px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.sidebar-user strong { color: var(--text); display: block; font-size: 13px; }
+
+/* ── Admin ───────────────────────────────────────────────── */
+.badge-perfil {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.badge-admin   { background: rgba(253,148,81,.15); color: var(--copper); }
+.badge-usuario { background: rgba(142,155,181,.15); color: var(--text2); }
+.badge-ativo    { background: rgba(76,175,125,.15); color: var(--success); }
+.badge-inativo  { background: rgba(224,92,92,.15);  color: var(--danger); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text2); }

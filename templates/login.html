@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Sistema 4X CRM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-box">
+      <div class="logo" style="justify-content:center;margin-bottom:24px">
+        <span class="logo-icon">◆</span>
+        <span class="logo-text">Sistema 4X CRM</span>
+      </div>
+      {% if erro %}
+      <div class="alert-banner" style="margin-bottom:16px">{{ erro }}</div>
+      {% endif %}
+      <form method="post">
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" name="email" required class="input" placeholder="seu@email.com" autofocus>
+        </div>
+        <div class="form-group">
+          <label>Senha</label>
+          <input type="password" name="senha" required class="input" placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">Entrar</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
