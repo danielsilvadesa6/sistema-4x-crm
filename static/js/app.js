@@ -4,16 +4,30 @@
   var sidebar = document.querySelector('.sidebar');
   var overlay = document.getElementById('sidebar-overlay');
   if (!btn || !sidebar || !overlay) return;
-  function open() { sidebar.classList.add('open'); overlay.classList.add('active'); }
-  function close() { sidebar.classList.remove('open'); overlay.classList.remove('active'); }
-  btn.addEventListener('click', function () {
-    sidebar.classList.contains('open') ? close() : open();
-  });
-  overlay.addEventListener('click', close);
-  // Fechar ao navegar (link clicado na sidebar)
+
+  function openSidebar()  { sidebar.classList.add('open');    overlay.classList.add('active'); }
+  function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('active'); }
+
+  // Suporte a click e touchend no botão hamburger (iOS Safari)
+  function toggleHandler(e) {
+    e.stopPropagation();
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  }
+  btn.addEventListener('click', toggleHandler);
+  btn.addEventListener('touchend', function (e) { e.preventDefault(); toggleHandler(e); });
+
+  // Overlay fecha sidebar
+  overlay.addEventListener('click', closeSidebar);
+  overlay.addEventListener('touchend', function (e) { e.preventDefault(); closeSidebar(); });
+
+  // Links da sidebar: navegar normalmente e fechar depois
   sidebar.querySelectorAll('a').forEach(function (a) {
+    // Garante cursor pointer para iOS reconhecer como tappable
+    a.style.cursor = 'pointer';
+    // Fecha a sidebar sem interferir na navegação
     a.addEventListener('click', function () {
-      if (window.innerWidth <= 768) close();
+      // Pequeno delay para o browser processar o href antes de animar
+      setTimeout(closeSidebar, 100);
     });
   });
 })();
