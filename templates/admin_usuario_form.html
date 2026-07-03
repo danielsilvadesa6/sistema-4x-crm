@@ -33,7 +33,7 @@
       <label>{{ 'Nova senha (deixe em branco para manter)' if usuario else 'Senha *' }}</label>
       <input type="password" name="senha" {% if not usuario %}required{% endif %} class="input" placeholder="••••••••">
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div class="form-actions" style="display:flex;gap:8px;margin-top:8px">
       <button type="submit" class="btn btn-primary">Salvar</button>
       <a href="{{ url_for('admin_usuarios') }}" class="btn btn-ghost">Cancelar</a>
     </div>

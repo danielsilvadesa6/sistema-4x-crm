@@ -7,6 +7,13 @@
   <span class="subtitle">Arraste os cards entre as colunas</span>
 </div>
 
+<!-- Navegação mobile entre colunas -->
+<div class="kanban-nav" id="kanban-nav">
+  <button class="kanban-nav-btn" id="kanban-prev" onclick="kanbanNav(-1)">&#8592;</button>
+  <span class="kanban-nav-info" id="kanban-nav-info">1 / {{ etapas|length }}</span>
+  <button class="kanban-nav-btn" id="kanban-next" onclick="kanbanNav(1)">&#8594;</button>
+</div>
+
 <div class="kanban-board" id="kanban">
   {% for etapa in etapas %}
   <div class="kanban-col" data-etapa="{{ etapa }}">
@@ -69,4 +76,37 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/kanban.js') }}"></script>
+<script>
+(function () {
+  var board = document.getElementById('kanban');
+  var info  = document.getElementById('kanban-nav-info');
+  var total = document.querySelectorAll('.kanban-col').length;
+  var current = 0;
+
+  function update() {
+    if (info) info.textContent = (current + 1) + ' / ' + total;
+  }
+
+  window.kanbanNav = function (dir) {
+    current = Math.max(0, Math.min(total - 1, current + dir));
+    var cols = board.querySelectorAll('.kanban-col');
+    if (cols[current]) {
+      cols[current].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+    }
+    update();
+  };
+
+  // Detecta scroll manual e atualiza índice
+  board.addEventListener('scroll', function () {
+    var cols = board.querySelectorAll('.kanban-col');
+    var scrollLeft = board.scrollLeft;
+    var idx = 0;
+    cols.forEach(function (col, i) {
+      if (col.offsetLeft - board.offsetLeft <= scrollLeft + 20) idx = i;
+    });
+    current = idx;
+    update();
+  });
+})();
+</script>
 {% endblock %}

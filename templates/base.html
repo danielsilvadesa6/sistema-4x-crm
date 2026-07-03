@@ -10,6 +10,20 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+  <!-- Mobile top bar -->
+  <div class="mobile-header">
+    <button class="hamburger" id="btn-menu" aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <line x1="3" y1="6"  x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <span class="mobile-title">Sistema 4X CRM</span>
+  </div>
+  <!-- Overlay para fechar sidebar -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
   <div class="layout">
     <!-- Sidebar -->
     <aside class="sidebar">

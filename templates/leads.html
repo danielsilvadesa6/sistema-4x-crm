@@ -32,8 +32,35 @@
   <a href="{{ url_for('leads') }}" class="btn btn-ghost">Limpar</a>
 </form>
 
-<!-- Tabela -->
-<div class="table-wrap">
+<!-- Cards mobile (visível só no celular) -->
+<div class="leads-cards-mobile">
+  {% for l in leads %}
+  <div class="lead-mobile-card {% if l.alerta %}row-alerta{% endif %}">
+    <a href="{{ url_for('ver_lead', lead_id=l.id) }}" class="lead-mobile-nome">{{ l.nome }}</a>
+    <div class="lead-mobile-meta">
+      <span class="tag tag-seg">{{ l.segmento }}</span>
+      <span class="tag tag-orig">{{ l.origem }}</span>
+      <span class="etapa-badge etapa-{{ l.etapa | replace(' ', '-') | lower }}">{{ l.etapa }}</span>
+    </div>
+    <div class="lead-mobile-meta">
+      {% if l.whatsapp %}<span>📱 {{ l.whatsapp }}</span>{% endif %}
+      {% if l.alerta %}
+      <span class="text-alert">⚠ {{ l.dias_sem_contato }}d sem contato</span>
+      {% else %}
+      <span class="text-muted">{{ l.dias_sem_contato }}d sem contato</span>
+      {% endif %}
+    </div>
+    <div class="lead-mobile-actions">
+      <a href="{{ url_for('ver_lead', lead_id=l.id) }}" class="btn btn-sm" style="flex:1;justify-content:center">Ver lead</a>
+    </div>
+  </div>
+  {% else %}
+  <p class="empty-msg">Nenhum lead encontrado.</p>
+  {% endfor %}
+</div>
+
+<!-- Tabela desktop (oculta no celular) -->
+<div class="leads-table-wrap-desktop table-wrap">
   <table class="leads-table">
     <thead>
       <tr>
@@ -68,5 +95,6 @@
       {% endfor %}
     </tbody>
   </table>
+</div>
 </div>
 {% endblock %}
