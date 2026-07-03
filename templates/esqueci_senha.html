@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esqueci minha senha — Sistema 4X CRM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-box">
+      <div class="logo" style="justify-content:center;margin-bottom:8px">
+        <span class="logo-icon">◆</span>
+        <span class="logo-text">Sistema 4X CRM</span>
+      </div>
+      <h2 style="text-align:center;font-size:17px;font-weight:600;margin-bottom:6px">Recuperar senha</h2>
+      <p style="text-align:center;font-size:13px;color:var(--text2);margin-bottom:20px">
+        Informe seu e-mail e enviaremos um link para redefinir sua senha.
+      </p>
+
+      {% if mensagem %}
+      <div class="alert-banner" style="background:#162a1e;border-color:var(--success);color:var(--success);margin-bottom:16px">
+        {{ mensagem }}
+      </div>
+      {% endif %}
+
+      {% if not mensagem %}
+      <form method="post">
+        <div class="form-group">
+          <label>E-mail cadastrado</label>
+          <input type="email" name="email" required class="input" placeholder="seu@email.com" autofocus>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">
+          Enviar link de recuperação
+        </button>
+      </form>
+      {% endif %}
+
+      <p style="text-align:center;margin-top:16px;font-size:13px">
+        <a href="{{ url_for('login') }}" class="link-forgot">← Voltar ao login</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

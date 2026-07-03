@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, session, g
+from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, session, g, flash
 import sqlite3
 import os
 import re
@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 from flask_session import Session
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +21,27 @@ app.config["SESSION_FILE_DIR"] = os.path.join(BASE_DIR, ".flask_session")
 app.config["SESSION_PERMANENT"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 Session(app)
+
+# ── Flask-Mail (Gmail SMTP) ───────────────────────────────────────────────────
+app.config["MAIL_SERVER"]         = "smtp.gmail.com"
+app.config["MAIL_PORT"]           = 587
+app.config["MAIL_USE_TLS"]        = True
+app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME")
+app.config["MAIL_PASSWORD"]       = os.environ.get("MAIL_PASSWORD")
+app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@sistema4x.com")
+mail = Mail(app)
+
+_ts = URLSafeTimedSerializer(app.config["SECRET_KEY"])
+
+def _gerar_token_reset(email):
+    return _ts.dumps(email, salt="reset-senha")
+
+def _verificar_token_reset(token, max_age=3600):
+    """Retorna o email ou None se inválido/expirado."""
+    try:
+        return _ts.loads(token, salt="reset-senha", max_age=max_age)
+    except (SignatureExpired, BadSignature):
+        return None
 
 ADMIN_EMAIL_PADRAO = "daniel@danielsaconsultoria.com.br"
 ADMIN_SENHA_PADRAO = "Admin@4x2025"
@@ -449,6 +472,81 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+# ── Esqueci minha senha ───────────────────────────────────────────────────────
+
+@app.route("/esqueci-senha", methods=["GET", "POST"])
+def esqueci_senha():
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
+    mensagem = None
+    erro = None
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        conn = get_db()
+        usuario = conn.execute(
+            "SELECT * FROM usuarios WHERE email=%s AND ativo=%s", (email, 1)
+        ).fetchone()
+        conn.close()
+
+        # Sempre mostra a mesma mensagem para não revelar se o email existe
+        mensagem = "Se esse e-mail estiver cadastrado, você receberá um link em instantes."
+
+        if usuario:
+            token = _gerar_token_reset(email)
+            link  = url_for("redefinir_senha", token=token, _external=True)
+            try:
+                msg = Message(
+                    subject="Redefinição de senha — Sistema 4X CRM",
+                    recipients=[email],
+                    html=f"""
+<p>Olá, <strong>{usuario['nome']}</strong>!</p>
+<p>Recebemos um pedido de redefinição de senha para sua conta no Sistema 4X CRM.</p>
+<p>Clique no link abaixo para criar uma nova senha. O link é válido por <strong>1 hora</strong>.</p>
+<p><a href="{link}" style="background:#FD9451;color:#111722;padding:10px 24px;border-radius:8px;
+   text-decoration:none;font-weight:700;display:inline-block;margin:12px 0">
+   Redefinir minha senha
+</a></p>
+<p style="color:#888;font-size:12px">Se você não solicitou isso, ignore este e-mail.</p>
+""",
+                )
+                mail.send(msg)
+            except Exception:
+                # Não expõe falha de envio ao usuário
+                pass
+
+    return render_template("esqueci_senha.html", mensagem=mensagem, erro=erro)
+
+
+@app.route("/redefinir-senha/<token>", methods=["GET", "POST"])
+def redefinir_senha(token):
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
+
+    email = _verificar_token_reset(token)
+    if not email:
+        return render_template("redefinir_senha.html", token=token,
+                               erro="Link inválido ou expirado. Solicite um novo.", email=None)
+
+    erro = None
+    if request.method == "POST":
+        nova = request.form.get("senha", "")
+        conf = request.form.get("confirmar", "")
+        if len(nova) < 6:
+            erro = "A senha deve ter pelo menos 6 caracteres."
+        elif nova != conf:
+            erro = "As senhas não coincidem."
+        else:
+            senha_hash = bcrypt.hashpw(nova.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            conn = get_db()
+            conn.execute("UPDATE usuarios SET senha=%s WHERE email=%s", (senha_hash, email))
+            conn.commit()
+            conn.close()
+            return render_template("redefinir_senha.html", token=token, email=email,
+                                   sucesso="Senha alterada com sucesso! Você já pode fazer login.")
+
+    return render_template("redefinir_senha.html", token=token, email=email, erro=erro)
 
 
 @app.route("/dashboard")

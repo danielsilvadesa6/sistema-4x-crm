@@ -656,6 +656,9 @@ textarea.input { resize: vertical; }
   background: var(--bg);
   padding: 20px;
 }
+.link-forgot { color: var(--text2); font-size: 13px; }
+.link-forgot:hover { color: var(--copper); }
+
 .login-box {
   background: var(--bg2);
   border: 1px solid var(--border);
