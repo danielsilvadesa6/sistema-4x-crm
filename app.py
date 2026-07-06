@@ -22,14 +22,17 @@ app.config["SESSION_PERMANENT"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 Session(app)
 
-# ── Flask-Mail (Gmail SMTP) ───────────────────────────────────────────────────
-app.config["MAIL_SERVER"]         = "smtp.gmail.com"
-app.config["MAIL_PORT"]           = 587
-app.config["MAIL_USE_TLS"]        = True
+# ── Flask-Mail (Hostinger SMTP) ───────────────────────────────────────────────
+app.config["MAIL_SERVER"]         = os.environ.get("MAIL_SERVER", "smtp.hostinger.com")
+app.config["MAIL_PORT"]           = int(os.environ.get("MAIL_PORT", 465))
+app.config["MAIL_USE_SSL"]        = True
+app.config["MAIL_USE_TLS"]        = False
 app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME")
 app.config["MAIL_PASSWORD"]       = os.environ.get("MAIL_PASSWORD")
-app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@sistema4x.com")
+app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME")
 mail = Mail(app)
+
+CRM_BASE_URL = os.environ.get("CRM_BASE_URL", "https://crm.danielsaconsultoria.com.br")
 
 _ts = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
@@ -495,7 +498,7 @@ def esqueci_senha():
 
         if usuario:
             token = _gerar_token_reset(email)
-            link  = url_for("redefinir_senha", token=token, _external=True)
+            link  = f"{CRM_BASE_URL}/redefinir-senha/{token}"
             try:
                 msg = Message(
                     subject="Redefinição de senha — Sistema 4X CRM",
