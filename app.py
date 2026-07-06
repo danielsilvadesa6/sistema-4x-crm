@@ -1,14 +1,15 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, session, g, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, session, g
 import sqlite3
 import os
 import re
+import sys
+import traceback
 import bcrypt
 from functools import wraps
 from datetime import datetime, timedelta
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 from flask_session import Session
-from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
 app = Flask(__name__)
@@ -22,17 +23,44 @@ app.config["SESSION_PERMANENT"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 Session(app)
 
-# ── Flask-Mail (Hostinger SMTP) ───────────────────────────────────────────────
-app.config["MAIL_SERVER"]         = os.environ.get("MAIL_SERVER", "smtp.hostinger.com")
-app.config["MAIL_PORT"]           = int(os.environ.get("MAIL_PORT", 465))
-app.config["MAIL_USE_SSL"]        = True
-app.config["MAIL_USE_TLS"]        = False
-app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME")
-app.config["MAIL_PASSWORD"]       = os.environ.get("MAIL_PASSWORD")
-app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME")
-mail = Mail(app)
+CRM_BASE_URL   = os.environ.get("CRM_BASE_URL", "https://crm.danielsaconsultoria.com.br")
+MAIL_USERNAME  = os.environ.get("MAIL_USERNAME")
+MAIL_PASSWORD  = os.environ.get("MAIL_PASSWORD")
+MAIL_ATIVO     = bool(MAIL_USERNAME and MAIL_PASSWORD)
 
-CRM_BASE_URL = os.environ.get("CRM_BASE_URL", "https://crm.danielsaconsultoria.com.br")
+def _enviar_email(destinatario, assunto, corpo_html):
+    """Envia e-mail via SMTP direto. Retorna (ok, erro_msg)."""
+    if not MAIL_ATIVO:
+        print("[MAIL] MAIL_USERNAME/MAIL_PASSWORD não configurados — e-mail não enviado.", file=sys.stderr)
+        return False, "Serviço de e-mail não configurado."
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    try:
+        _server = os.environ.get("MAIL_SERVER", "smtp.hostinger.com")
+        _port   = int(os.environ.get("MAIL_PORT", "465") or "465")
+        _ssl    = os.environ.get("MAIL_USE_SSL", "true").lower() != "false"
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = assunto
+        msg["From"]    = MAIL_USERNAME
+        msg["To"]      = destinatario
+        msg.attach(MIMEText(corpo_html, "html", "utf-8"))
+        if _ssl:
+            import ssl as _ssl_lib
+            ctx = _ssl_lib.create_default_context()
+            with smtplib.SMTP_SSL(_server, _port, context=ctx) as smtp:
+                smtp.login(MAIL_USERNAME, MAIL_PASSWORD)
+                smtp.sendmail(MAIL_USERNAME, destinatario, msg.as_string())
+        else:
+            with smtplib.SMTP(_server, _port) as smtp:
+                smtp.starttls()
+                smtp.login(MAIL_USERNAME, MAIL_PASSWORD)
+                smtp.sendmail(MAIL_USERNAME, destinatario, msg.as_string())
+        return True, None
+    except Exception:
+        err = traceback.format_exc()
+        print(f"[MAIL] Erro ao enviar para {destinatario}:\n{err}", file=sys.stderr)
+        return False, err
 
 _ts = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
@@ -46,7 +74,7 @@ def _verificar_token_reset(token, max_age=3600):
     except (SignatureExpired, BadSignature):
         return None
 
-ADMIN_EMAIL_PADRAO = "daniel@danielsaconsultoria.com.br"
+ADMIN_EMAIL_PADRAO = "contato@danielsaconsultoria.com.br"
 ADMIN_SENHA_PADRAO = "Admin@4x2025"
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -499,11 +527,7 @@ def esqueci_senha():
         if usuario:
             token = _gerar_token_reset(email)
             link  = f"{CRM_BASE_URL}/redefinir-senha/{token}"
-            try:
-                msg = Message(
-                    subject="Redefinição de senha — Sistema 4X CRM",
-                    recipients=[email],
-                    html=f"""
+            corpo = f"""
 <p>Olá, <strong>{usuario['nome']}</strong>!</p>
 <p>Recebemos um pedido de redefinição de senha para sua conta no Sistema 4X CRM.</p>
 <p>Clique no link abaixo para criar uma nova senha. O link é válido por <strong>1 hora</strong>.</p>
@@ -512,12 +536,8 @@ def esqueci_senha():
    Redefinir minha senha
 </a></p>
 <p style="color:#888;font-size:12px">Se você não solicitou isso, ignore este e-mail.</p>
-""",
-                )
-                mail.send(msg)
-            except Exception:
-                # Não expõe falha de envio ao usuário
-                pass
+"""
+            _enviar_email(email, "Redefinição de senha — Sistema 4X CRM", corpo)
 
     return render_template("esqueci_senha.html", mensagem=mensagem, erro=erro)
 
