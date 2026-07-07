@@ -28,39 +28,55 @@ MAIL_USERNAME  = os.environ.get("MAIL_USERNAME")
 MAIL_PASSWORD  = os.environ.get("MAIL_PASSWORD")
 MAIL_ATIVO     = bool(MAIL_USERNAME and MAIL_PASSWORD)
 
+_SMTP_TIMEOUT = 10  # segundos — evita travar o worker do Gunicorn
+
 def _enviar_email(destinatario, assunto, corpo_html):
-    """Envia e-mail via SMTP direto. Retorna (ok, erro_msg)."""
+    """Envia e-mail via SMTP com timeout explícito. Retorna (ok, erro_msg)."""
     if not MAIL_ATIVO:
-        print("[MAIL] MAIL_USERNAME/MAIL_PASSWORD não configurados — e-mail não enviado.", file=sys.stderr)
+        app.logger.warning("[MAIL] MAIL_USERNAME/MAIL_PASSWORD não configurados — e-mail não enviado.")
         return False, "Serviço de e-mail não configurado."
-    import smtplib
+
+    import smtplib, ssl as _ssl_lib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
+
+    _server = os.environ.get("MAIL_SERVER", "smtp.hostinger.com")
+    _port   = int(os.environ.get("MAIL_PORT", "587") or "587")
+    # porta 465 → SSL direto; qualquer outra (587, 25) → STARTTLS
+    _use_ssl_direct = (_port == 465)
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = assunto
+    msg["From"]    = MAIL_USERNAME
+    msg["To"]      = destinatario
+    msg.attach(MIMEText(corpo_html, "html", "utf-8"))
+
     try:
-        _server = os.environ.get("MAIL_SERVER", "smtp.hostinger.com")
-        _port   = int(os.environ.get("MAIL_PORT", "465") or "465")
-        _ssl    = os.environ.get("MAIL_USE_SSL", "true").lower() != "false"
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = assunto
-        msg["From"]    = MAIL_USERNAME
-        msg["To"]      = destinatario
-        msg.attach(MIMEText(corpo_html, "html", "utf-8"))
-        if _ssl:
-            import ssl as _ssl_lib
+        if _use_ssl_direct:
             ctx = _ssl_lib.create_default_context()
-            with smtplib.SMTP_SSL(_server, _port, context=ctx) as smtp:
+            with smtplib.SMTP_SSL(_server, _port, context=ctx, timeout=_SMTP_TIMEOUT) as smtp:
                 smtp.login(MAIL_USERNAME, MAIL_PASSWORD)
                 smtp.sendmail(MAIL_USERNAME, destinatario, msg.as_string())
         else:
-            with smtplib.SMTP(_server, _port) as smtp:
-                smtp.starttls()
+            with smtplib.SMTP(_server, _port, timeout=_SMTP_TIMEOUT) as smtp:
+                smtp.ehlo()
+                smtp.starttls(context=_ssl_lib.create_default_context())
+                smtp.ehlo()
                 smtp.login(MAIL_USERNAME, MAIL_PASSWORD)
                 smtp.sendmail(MAIL_USERNAME, destinatario, msg.as_string())
+
+        app.logger.info(f"[MAIL] E-mail enviado com sucesso para {destinatario}")
         return True, None
-    except Exception:
-        err = traceback.format_exc()
-        print(f"[MAIL] Erro ao enviar para {destinatario}:\n{err}", file=sys.stderr)
-        return False, err
+
+    except smtplib.SMTPAuthenticationError as e:
+        app.logger.error(f"[MAIL] Falha de autenticação SMTP: {e}")
+        return False, "Falha de autenticação SMTP. Verifique MAIL_USERNAME e MAIL_PASSWORD."
+    except (smtplib.SMTPConnectError, ConnectionRefusedError, TimeoutError, OSError) as e:
+        app.logger.error(f"[MAIL] Falha de conexão SMTP ({_server}:{_port}): {e}")
+        return False, f"Não foi possível conectar ao servidor de e-mail ({_server}:{_port})."
+    except Exception as e:
+        app.logger.error(f"[MAIL] Erro inesperado ao enviar para {destinatario}: {traceback.format_exc()}")
+        return False, str(e)
 
 _ts = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
@@ -521,9 +537,6 @@ def esqueci_senha():
         ).fetchone()
         conn.close()
 
-        # Sempre mostra a mesma mensagem para não revelar se o email existe
-        mensagem = "Se esse e-mail estiver cadastrado, você receberá um link em instantes."
-
         if usuario:
             token = _gerar_token_reset(email)
             link  = f"{CRM_BASE_URL}/redefinir-senha/{token}"
@@ -537,7 +550,15 @@ def esqueci_senha():
 </a></p>
 <p style="color:#888;font-size:12px">Se você não solicitou isso, ignore este e-mail.</p>
 """
-            _enviar_email(email, "Redefinição de senha — Sistema 4X CRM", corpo)
+            ok, err_msg = _enviar_email(email, "Redefinição de senha — Sistema 4X CRM", corpo)
+            if ok:
+                mensagem = "Link de redefinição enviado! Verifique sua caixa de entrada (e a pasta de spam)."
+            else:
+                erro = ("Não foi possível enviar o e-mail no momento. "
+                        "Tente novamente em instantes ou entre em contato com o suporte.")
+        else:
+            # E-mail não encontrado — mesma mensagem neutra para não revelar cadastros
+            mensagem = "Se esse e-mail estiver cadastrado, você receberá um link em instantes."
 
     return render_template("esqueci_senha.html", mensagem=mensagem, erro=erro)
 
