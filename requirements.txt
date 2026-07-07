@@ -4,3 +4,4 @@ psycopg2-binary==2.9.9
 gunicorn==22.0.0
 bcrypt==4.2.0
 Flask-Session==0.8.0
+resend==2.4.0

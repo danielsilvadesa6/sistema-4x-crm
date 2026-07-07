@@ -24,58 +24,27 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
 Session(app)
 
 CRM_BASE_URL   = os.environ.get("CRM_BASE_URL", "https://crm.danielsaconsultoria.com.br")
-MAIL_USERNAME  = os.environ.get("MAIL_USERNAME")
-MAIL_PASSWORD  = os.environ.get("MAIL_PASSWORD")
-MAIL_ATIVO     = bool(MAIL_USERNAME and MAIL_PASSWORD)
-
-_SMTP_TIMEOUT = 10  # segundos — evita travar o worker do Gunicorn
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+MAIL_FROM      = "Sistema 4X CRM <contato@danielsaconsultoria.com.br>"
 
 def _enviar_email(destinatario, assunto, corpo_html):
-    """Envia e-mail via SMTP com timeout explícito. Retorna (ok, erro_msg)."""
-    if not MAIL_ATIVO:
-        app.logger.warning("[MAIL] MAIL_USERNAME/MAIL_PASSWORD não configurados — e-mail não enviado.")
+    """Envia e-mail via Resend API (HTTP). Retorna (ok, erro_msg)."""
+    if not RESEND_API_KEY:
+        app.logger.warning("[MAIL] RESEND_API_KEY não configurada — e-mail não enviado.")
         return False, "Serviço de e-mail não configurado."
-
-    import smtplib, ssl as _ssl_lib
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-
-    _server = os.environ.get("MAIL_SERVER", "smtp.hostinger.com")
-    _port   = int(os.environ.get("MAIL_PORT", "587") or "587")
-    # porta 465 → SSL direto; qualquer outra (587, 25) → STARTTLS
-    _use_ssl_direct = (_port == 465)
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = assunto
-    msg["From"]    = MAIL_USERNAME
-    msg["To"]      = destinatario
-    msg.attach(MIMEText(corpo_html, "html", "utf-8"))
-
     try:
-        if _use_ssl_direct:
-            ctx = _ssl_lib.create_default_context()
-            with smtplib.SMTP_SSL(_server, _port, context=ctx, timeout=_SMTP_TIMEOUT) as smtp:
-                smtp.login(MAIL_USERNAME, MAIL_PASSWORD)
-                smtp.sendmail(MAIL_USERNAME, destinatario, msg.as_string())
-        else:
-            with smtplib.SMTP(_server, _port, timeout=_SMTP_TIMEOUT) as smtp:
-                smtp.ehlo()
-                smtp.starttls(context=_ssl_lib.create_default_context())
-                smtp.ehlo()
-                smtp.login(MAIL_USERNAME, MAIL_PASSWORD)
-                smtp.sendmail(MAIL_USERNAME, destinatario, msg.as_string())
-
-        app.logger.info(f"[MAIL] E-mail enviado com sucesso para {destinatario}")
+        import resend
+        resend.api_key = RESEND_API_KEY
+        resend.Emails.send({
+            "from":    MAIL_FROM,
+            "to":      [destinatario],
+            "subject": assunto,
+            "html":    corpo_html,
+        })
+        app.logger.info(f"[MAIL] E-mail enviado via Resend para {destinatario}")
         return True, None
-
-    except smtplib.SMTPAuthenticationError as e:
-        app.logger.error(f"[MAIL] Falha de autenticação SMTP: {e}")
-        return False, "Falha de autenticação SMTP. Verifique MAIL_USERNAME e MAIL_PASSWORD."
-    except (smtplib.SMTPConnectError, ConnectionRefusedError, TimeoutError, OSError) as e:
-        app.logger.error(f"[MAIL] Falha de conexão SMTP ({_server}:{_port}): {e}")
-        return False, f"Não foi possível conectar ao servidor de e-mail ({_server}:{_port})."
     except Exception as e:
-        app.logger.error(f"[MAIL] Erro inesperado ao enviar para {destinatario}: {traceback.format_exc()}")
+        app.logger.error(f"[MAIL] Erro ao enviar para {destinatario}: {traceback.format_exc()}")
         return False, str(e)
 
 _ts = URLSafeTimedSerializer(app.config["SECRET_KEY"])
