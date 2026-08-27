@@ -48,11 +48,9 @@
         </a>
         </div>
         <div class="card-tags">
-          <span class="tag tag-seg">{{ card.segmento }}</span>
-          <span class="tag tag-orig">{{ card.origem }}</span>
-          {% if card.campanha %}
-          <span class="tag tag-camp" title="{{ card.campanha }}">{{ card.campanha | truncate(22, True, '…') }}</span>
-          {% endif %}
+          {% if card.segmento %}<span class="tag tag-seg">{{ card.segmento }}</span>{% endif %}
+          {% if card.origem %}<span class="tag tag-orig">{{ card.origem }}</span>{% endif %}
+          {% if card.campanha %}<span class="tag tag-camp" title="{{ card.campanha }}">{{ card.campanha | truncate(22, True, '…') }}</span>{% endif %}
         </div>
         <div class="card-footer-info">
           {% if card.alerta %}
