@@ -4,6 +4,8 @@ import os
 import re
 import sys
 import traceback
+import threading
+import time
 import bcrypt
 from functools import wraps
 from datetime import datetime, timedelta
@@ -224,6 +226,17 @@ def init_db():
                        ("usuario_id", "INTEGER"), ("instagram", "TEXT")]:
         if col not in colunas:
             conn.execute(f"ALTER TABLE leads ADD COLUMN {col} {tipo}")
+
+    # Migração: novos campos Meta CAPI na tabela usuarios
+    cols_usuarios = [r[1] if not USE_PG else r["column_name"]
+                     for r in conn.execute(
+                         "SELECT column_name FROM information_schema.columns WHERE table_name='usuarios'"
+                         if USE_PG else
+                         "PRAGMA table_info(usuarios)"
+                     ).fetchall()]
+    for col, tipo in [("meta_pixel_id", "TEXT"), ("meta_access_token", "TEXT")]:
+        if col not in cols_usuarios:
+            conn.execute(f"ALTER TABLE usuarios ADD COLUMN {col} {tipo}")
     conn.commit()
 
     # Renomear etapas antigas para os novos nomes
@@ -425,6 +438,37 @@ def injetar_usuario():
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
+
+def _disparar_capi(pixel_id, access_token, lead_nome, valor_servico, evento="Lead"):
+    """Dispara evento para a Meta Conversions API em background (não trava o request)."""
+    def _enviar():
+        try:
+            import urllib.request, urllib.parse, json as _json
+            url = f"https://graph.facebook.com/v21.0/{pixel_id}/events?access_token={access_token}"
+            payload = {
+                "data": [{
+                    "event_name": evento,
+                    "event_time": int(time.time()),
+                    "action_source": "crm",
+                    "user_data": {"client_user_agent": "Sistema4XCRM/1.0"},
+                    "custom_data": {
+                        "currency": "BRL",
+                        "value": float(valor_servico) if valor_servico else 0,
+                        "content_name": lead_nome,
+                    }
+                }]
+            }
+            body = _json.dumps(payload).encode("utf-8")
+            req  = urllib.request.Request(url, data=body,
+                                          headers={"Content-Type": "application/json"},
+                                          method="POST")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                resultado = resp.read().decode()
+            app.logger.info(f"[CAPI] Evento '{evento}' enviado para pixel {pixel_id}: {resultado}")
+        except Exception:
+            app.logger.error(f"[CAPI] Falha ao enviar evento para pixel {pixel_id}:\n{traceback.format_exc()}")
+    threading.Thread(target=_enviar, daemon=True).start()
+
 
 def instagram_link(usuario):
     if not usuario:
@@ -855,6 +899,21 @@ def api_mover():
         "UPDATE leads SET etapa=%s, atualizado_em=NOW()::text WHERE id=%s", (nova_etapa, lead_id)
     )
     conn.commit()
+
+    # Disparo CAPI assíncrono ao fechar negócio
+    if nova_etapa == "Negócio Fechado":
+        dono = conn.execute(
+            "SELECT meta_pixel_id, meta_access_token FROM usuarios WHERE id=%s",
+            (session["user_id"],)
+        ).fetchone()
+        if dono and dono["meta_pixel_id"] and dono["meta_access_token"]:
+            _disparar_capi(
+                pixel_id=dono["meta_pixel_id"],
+                access_token=dono["meta_access_token"],
+                lead_nome=lead["nome"],
+                valor_servico=lead["valor_servico"],
+            )
+
     conn.close()
     return jsonify({"ok": True})
 
@@ -1161,6 +1220,9 @@ def admin_novo_usuario():
         senha  = d.get("senha", "")
         perfil = d.get("perfil") if d.get("perfil") in ("admin", "usuario") else "usuario"
 
+        pixel_id     = d.get("meta_pixel_id", "").strip()
+        access_token = d.get("meta_access_token", "").strip()
+
         if not nome or not email or not senha:
             erro = "Preencha nome, e-mail e senha."
         else:
@@ -1172,8 +1234,8 @@ def admin_novo_usuario():
             else:
                 senha_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
                 conn.execute(
-                    "INSERT INTO usuarios (nome, email, senha, perfil, ativo) VALUES (%s,%s,%s,%s,%s)",
-                    (nome, email, senha_hash, perfil, 1)
+                    "INSERT INTO usuarios (nome, email, senha, perfil, ativo, meta_pixel_id, meta_access_token) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                    (nome, email, senha_hash, perfil, 1, pixel_id or None, access_token or None)
                 )
                 conn.commit()
                 conn.close()
@@ -1193,10 +1255,12 @@ def admin_editar_usuario(usuario_id):
     erro = None
     if request.method == "POST":
         d = request.form
-        nome   = d.get("nome", "").strip()
-        email  = d.get("email", "").strip().lower()
-        senha  = d.get("senha", "")
-        perfil = d.get("perfil") if d.get("perfil") in ("admin", "usuario") else "usuario"
+        nome         = d.get("nome", "").strip()
+        email        = d.get("email", "").strip().lower()
+        senha        = d.get("senha", "")
+        perfil       = d.get("perfil") if d.get("perfil") in ("admin", "usuario") else "usuario"
+        pixel_id     = d.get("meta_pixel_id", "").strip()
+        access_token = d.get("meta_access_token", "").strip()
 
         if not nome or not email:
             erro = "Preencha nome e e-mail."
@@ -1210,13 +1274,13 @@ def admin_editar_usuario(usuario_id):
                 if senha:
                     senha_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
                     conn.execute(
-                        "UPDATE usuarios SET nome=%s, email=%s, perfil=%s, senha=%s WHERE id=%s",
-                        (nome, email, perfil, senha_hash, usuario_id)
+                        "UPDATE usuarios SET nome=%s, email=%s, perfil=%s, senha=%s, meta_pixel_id=%s, meta_access_token=%s WHERE id=%s",
+                        (nome, email, perfil, senha_hash, pixel_id or None, access_token or None, usuario_id)
                     )
                 else:
                     conn.execute(
-                        "UPDATE usuarios SET nome=%s, email=%s, perfil=%s WHERE id=%s",
-                        (nome, email, perfil, usuario_id)
+                        "UPDATE usuarios SET nome=%s, email=%s, perfil=%s, meta_pixel_id=%s, meta_access_token=%s WHERE id=%s",
+                        (nome, email, perfil, pixel_id or None, access_token or None, usuario_id)
                     )
                 conn.commit()
                 conn.close()

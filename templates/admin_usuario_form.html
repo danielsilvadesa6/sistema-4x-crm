@@ -33,6 +33,29 @@
       <label>{{ 'Nova senha (deixe em branco para manter)' if usuario else 'Senha *' }}</label>
       <input type="password" name="senha" {% if not usuario %}required{% endif %} class="input" placeholder="••••••••">
     </div>
+
+    <div style="border-top:1px solid var(--border);margin:20px 0 16px;padding-top:16px">
+      <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--copper)">Meta Conversions API</h3>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:14px">
+        Quando um negócio for fechado, o sistema dispara automaticamente um evento "Lead"
+        para o pixel configurado abaixo.
+      </p>
+      <div class="form-group">
+        <label>Pixel ID</label>
+        <input type="text" name="meta_pixel_id" class="input"
+               placeholder="Ex: 1234567890123456"
+               value="{{ usuario.meta_pixel_id if usuario and usuario.meta_pixel_id else '' }}">
+      </div>
+      <div class="form-group">
+        <label>Access Token</label>
+        <input type="text" name="meta_access_token" class="input"
+               placeholder="Token de acesso da API de Conversões"
+               value="{{ usuario.meta_access_token if usuario and usuario.meta_access_token else '' }}"
+               autocomplete="off">
+        <span style="font-size:11px;color:var(--text2)">Gerado no Gerenciador de Eventos → Configurações → API de Conversões</span>
+      </div>
+    </div>
+
     <div class="form-actions" style="display:flex;gap:8px;margin-top:8px">
       <button type="submit" class="btn btn-primary">Salvar</button>
       <a href="{{ url_for('admin_usuarios') }}" class="btn btn-ghost">Cancelar</a>
