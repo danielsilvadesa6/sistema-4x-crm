@@ -59,10 +59,10 @@ function tentarMover(leadId, novaEtapa) {
 // Retorna qual campo precisa ser preenchido para cada transição
 function campoNecessario(de, para) {
   const mapa = {
-    'Novo Lead→Tentando Contato':       { tipo: 'text',     nome: 'whatsapp',      label: 'WhatsApp' },
-    'Contato Feito→Consulta Agendada':  { tipo: 'date+time', nome: 'data_hora_consulta', label: 'Data e Hora da Consulta' },
-    'Consulta Agendada→Fechado':        { tipo: 'number',   nome: 'valor_servico', label: 'Valor do Serviço (R$)' },
-    'qualquer→Perdido':                 { tipo: 'text',     nome: 'motivo_perda',  label: 'Motivo da Perda' },
+    'Novo Lead→Tentando Contato':        { tipo: 'text',   nome: 'whatsapp',      label: 'WhatsApp' },
+    'Contato Feito→Proposta Enviada':    { tipo: 'text',   nome: 'observacoes',   label: 'Observações' },
+    'Em Negociação→Negócio Fechado':     { tipo: 'number', nome: 'valor_servico', label: 'Valor do Serviço (R$)' },
+    'qualquer→Perdido':                  { tipo: 'text',   nome: 'motivo_perda',  label: 'Motivo da Perda' },
   };
   const chave = `${de}→${para}`;
   if (mapa[chave]) return mapa[chave];

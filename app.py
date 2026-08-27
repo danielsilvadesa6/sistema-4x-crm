@@ -69,7 +69,7 @@ if USE_PG:
     import psycopg2
     import psycopg2.extras
 
-ETAPAS          = ["Novo Lead", "Tentando Contato", "Contato Feito", "Consulta Agendada", "Fechado", "Perdido"]
+ETAPAS = ["Novo Lead", "Tentando Contato", "Contato Feito", "Proposta Enviada", "Em Negociação", "Negócio Fechado", "Perdido"]
 SEGMENTOS       = ["Advocacia", "Clínica Médica", "Odontologia", "Psicologia", "Veterinária", "Outro"]
 ORIGENS         = ["Google Ads", "Instagram", "Indicação", "Site", "WhatsApp direto", "Outro"]
 TIPOS_INTERACAO = ["WhatsApp", "Ligação", "E-mail", "Reunião", "Presencial", "Outro"]
@@ -221,9 +221,14 @@ def init_db():
         colunas = [r[1] for r in conn.execute("PRAGMA table_info(leads)").fetchall()]
 
     for col, tipo in [("custo_aquisicao", "REAL"), ("lembrete_em", "TEXT"), ("lembrete_nota", "TEXT"),
-                       ("usuario_id", "INTEGER")]:
+                       ("usuario_id", "INTEGER"), ("instagram", "TEXT")]:
         if col not in colunas:
             conn.execute(f"ALTER TABLE leads ADD COLUMN {col} {tipo}")
+    conn.commit()
+
+    # Renomear etapas antigas para os novos nomes
+    conn.execute("UPDATE leads SET etapa='Proposta Enviada' WHERE etapa='Consulta Agendada'")
+    conn.execute("UPDATE leads SET etapa='Negócio Fechado'  WHERE etapa='Negócio Fechado'")
     conn.commit()
 
     # Cria o usuário admin padrão se não existir
@@ -421,6 +426,13 @@ def injetar_usuario():
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+def instagram_link(usuario):
+    if not usuario:
+        return None
+    u = usuario.lstrip("@").strip()
+    return f"https://www.instagram.com/{u}/" if u else None
+
+
 def whatsapp_link(numero):
     if not numero:
         return None
@@ -586,7 +598,7 @@ def dashboard():
 
     atrasados = []
     for l in conn.execute(
-        "SELECT * FROM leads WHERE usuario_id=%s AND etapa NOT IN ('Fechado','Perdido')", (uid,)
+        "SELECT * FROM leads WHERE usuario_id=%s AND etapa NOT IN ('Negócio Fechado','Perdido')", (uid,)
     ).fetchall():
         d = dias_sem_contato(l["id"], l["criado_em"], conn)
         if d > 7:
@@ -597,7 +609,7 @@ def dashboard():
         SELECT id, nome, etapa, lembrete_em, lembrete_nota
         FROM leads
         WHERE usuario_id=%s AND lembrete_em IS NOT NULL AND lembrete_em <= %s
-          AND etapa NOT IN ('Fechado','Perdido')
+          AND etapa NOT IN ('Negócio Fechado','Perdido')
         ORDER BY lembrete_em ASC
     """, (uid, hoje)).fetchall()]
 
@@ -623,7 +635,8 @@ def pipeline():
             cards.append({
                 "id": l["id"], "nome": l["nome"], "segmento": l["segmento"],
                 "origem": l["origem"], "dias_sem_contato": d, "alerta": d > 7,
-                "etapa": l["etapa"], "whatsapp_link": whatsapp_link(l["whatsapp"])
+                "etapa": l["etapa"], "whatsapp_link": whatsapp_link(l["whatsapp"]),
+                "instagram_link": instagram_link(l["instagram"])
             })
         colunas[e] = cards
     conn.close()
@@ -676,11 +689,12 @@ def novo_lead():
         d = request.form
         conn = get_db()
         conn.execute("""
-            INSERT INTO leads (nome, whatsapp, email, segmento, origem, observacoes,
+            INSERT INTO leads (nome, whatsapp, email, instagram, segmento, origem, observacoes,
                                custo_aquisicao, lembrete_em, lembrete_nota, usuario_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (d["nome"], d["whatsapp"], d.get("email"), d.get("segmento"),
-              d.get("origem"), d.get("observacoes"),
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (d["nome"], d["whatsapp"], d.get("email") or None,
+              d.get("instagram") or None,
+              d.get("segmento"), d.get("origem"), d.get("observacoes"),
               d.get("custo_aquisicao") or None,
               d.get("lembrete_em")     or None,
               d.get("lembrete_nota")   or None,
@@ -711,7 +725,8 @@ def ver_lead(lead_id):
                            etapas=ETAPAS, segmentos=SEGMENTOS, origens=ORIGENS,
                            now_str=datetime.now().strftime("%Y-%m-%dT%H:%M"),
                            hoje=datetime.now().strftime("%Y-%m-%d"),
-                           whatsapp_link=whatsapp_link(lead["whatsapp"]))
+                           whatsapp_link=whatsapp_link(lead["whatsapp"]),
+                           instagram_link=instagram_link(lead["instagram"]))
 
 
 @app.route("/lead/<int:lead_id>/editar", methods=["POST"])
@@ -723,12 +738,14 @@ def editar_lead(lead_id):
         return "Lead não encontrado", 404
     d = request.form
     conn.execute("""
-        UPDATE leads SET nome=%s, whatsapp=%s, email=%s, segmento=%s, origem=%s,
+        UPDATE leads SET nome=%s, whatsapp=%s, email=%s, instagram=%s, segmento=%s, origem=%s,
         observacoes=%s, valor_servico=%s, data_consulta=%s, hora_consulta=%s,
         motivo_perda=%s, custo_aquisicao=%s, lembrete_em=%s, lembrete_nota=%s,
         atualizado_em=NOW()::text
         WHERE id=%s
-    """, (d["nome"], d["whatsapp"], d.get("email"), d.get("segmento"), d.get("origem"),
+    """, (d["nome"], d["whatsapp"], d.get("email") or None,
+          d.get("instagram") or None,
+          d.get("segmento"), d.get("origem"),
           d.get("observacoes"),
           d.get("valor_servico")    or None,
           d.get("data_consulta")    or None,
@@ -816,12 +833,16 @@ def api_mover():
         n = conn.execute("SELECT COUNT(*) FROM interacoes WHERE lead_id=%s", (lead_id,)).fetchone()[0]
         if n == 0:
             erro = "Registre pelo menos 1 interação antes de avançar."
-    elif nova_etapa == "Consulta Agendada" and etapa_atual == "Contato Feito":
-        if not lead["data_consulta"] or not lead["hora_consulta"]:
-            erro = "Preencha a data e hora da consulta antes de avançar."
-    elif nova_etapa == "Fechado" and etapa_atual == "Consulta Agendada":
+    elif nova_etapa == "Proposta Enviada" and etapa_atual == "Contato Feito":
+        if not lead["observacoes"]:
+            erro = "Preencha as observações do lead antes de enviar a proposta."
+    elif nova_etapa == "Em Negociação" and etapa_atual == "Proposta Enviada":
+        n = conn.execute("SELECT COUNT(*) FROM interacoes WHERE lead_id=%s", (lead_id,)).fetchone()[0]
+        if n == 0:
+            erro = "Registre pelo menos 1 interação antes de avançar para Em Negociação."
+    elif nova_etapa == "Negócio Fechado" and etapa_atual == "Em Negociação":
         if not lead["valor_servico"]:
-            erro = "Preencha o valor do serviço antes de fechar."
+            erro = "Preencha o valor do serviço antes de fechar o negócio."
     elif nova_etapa == "Perdido":
         if not lead["motivo_perda"]:
             erro = "Informe o motivo da perda antes de mover para Perdido."
@@ -881,7 +902,7 @@ def relatorios():
             "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND origem=%s", (uid, origem)
         ).fetchone()[0]
         fechados = conn.execute(
-            "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND origem=%s AND etapa='Fechado'", (uid, origem)
+            "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND origem=%s AND etapa='Negócio Fechado'", (uid, origem)
         ).fetchone()[0]
         conv_origem[origem] = {
             "total": total, "fechados": fechados,
@@ -891,13 +912,13 @@ def relatorios():
     receita_origem = {}
     for r in conn.execute("""
         SELECT origem, SUM(valor_servico) total
-        FROM leads WHERE usuario_id=%s AND etapa='Fechado' AND valor_servico IS NOT NULL GROUP BY origem
+        FROM leads WHERE usuario_id=%s AND etapa='Negócio Fechado' AND valor_servico IS NOT NULL GROUP BY origem
     """, (uid,)):
         receita_origem[r["origem"] or "Não informado"] = r["total"] or 0
 
     receita_total  = sum(receita_origem.values())
     ticket_medio   = conn.execute(
-        "SELECT AVG(valor_servico) FROM leads WHERE usuario_id=%s AND etapa='Fechado' AND valor_servico IS NOT NULL",
+        "SELECT AVG(valor_servico) FROM leads WHERE usuario_id=%s AND etapa='Negócio Fechado' AND valor_servico IS NOT NULL",
         (uid,)
     ).fetchone()[0] or 0
 
@@ -911,7 +932,7 @@ def relatorios():
 
     tempos = []
     for r in conn.execute(
-        "SELECT criado_em, atualizado_em FROM leads WHERE usuario_id=%s AND etapa='Fechado'", (uid,)
+        "SELECT criado_em, atualizado_em FROM leads WHERE usuario_id=%s AND etapa='Negócio Fechado'", (uid,)
     ).fetchall():
         try:
             c = datetime.strptime(str(r["criado_em"])[:19],    "%Y-%m-%d %H:%M:%S")
@@ -924,7 +945,7 @@ def relatorios():
     total_leads   = conn.execute(
         "SELECT COUNT(*) FROM leads WHERE usuario_id=%s", (uid,)
     ).fetchone()[0]
-    total_fechados = funil.get("Fechado", 0)
+    total_fechados = funil.get('Negócio Fechado', 0)
     taxa_conv_geral = round(total_fechados / total_leads * 100, 1) if total_leads else 0
 
     custo_origem = {}
@@ -969,14 +990,14 @@ def exportar_pdf():
         "SELECT COUNT(*) FROM leads WHERE usuario_id=%s", (uid,)
     ).fetchone()[0]
     total_fechados = conn.execute(
-        "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND etapa='Fechado'", (uid,)
+        "SELECT COUNT(*) FROM leads WHERE usuario_id=%s AND etapa='Negócio Fechado'", (uid,)
     ).fetchone()[0]
     taxa_conv      = round(total_fechados / total_leads * 100, 1) if total_leads else 0
     receita_total  = conn.execute(
-        "SELECT COALESCE(SUM(valor_servico),0) FROM leads WHERE usuario_id=%s AND etapa='Fechado'", (uid,)
+        "SELECT COALESCE(SUM(valor_servico),0) FROM leads WHERE usuario_id=%s AND etapa='Negócio Fechado'", (uid,)
     ).fetchone()[0] or 0
     ticket_medio   = conn.execute(
-        "SELECT COALESCE(AVG(valor_servico),0) FROM leads WHERE usuario_id=%s AND etapa='Fechado' AND valor_servico IS NOT NULL",
+        "SELECT COALESCE(AVG(valor_servico),0) FROM leads WHERE usuario_id=%s AND etapa='Negócio Fechado' AND valor_servico IS NOT NULL",
         (uid,)
     ).fetchone()[0] or 0
     invest_total   = conn.execute(
@@ -993,8 +1014,8 @@ def exportar_pdf():
     canais = conn.execute("""
         SELECT l.origem,
                COUNT(*) total,
-               SUM(CASE WHEN l.etapa='Fechado' THEN 1 ELSE 0 END) fechados,
-               COALESCE(SUM(CASE WHEN l.etapa='Fechado' THEN l.valor_servico ELSE 0 END),0) receita,
+               SUM(CASE WHEN l.etapa='Negócio Fechado' THEN 1 ELSE 0 END) fechados,
+               COALESCE(SUM(CASE WHEN l.etapa='Negócio Fechado' THEN l.valor_servico ELSE 0 END),0) receita,
                COALESCE(SUM(l.custo_aquisicao),0) custo
         FROM leads l WHERE l.usuario_id=%s GROUP BY l.origem ORDER BY total DESC
     """, (uid,)).fetchall()

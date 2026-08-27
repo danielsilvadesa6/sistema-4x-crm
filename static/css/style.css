@@ -273,6 +273,38 @@ a { color: inherit; text-decoration: none; }
 .btn-whatsapp-detalhe:hover { opacity: 0.88; }
 .btn-whatsapp-detalhe svg { fill: #fff; flex-shrink: 0; }
 
+.btn-instagram {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #E1306C;
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  width: fit-content;
+}
+.btn-instagram:hover { opacity: 0.88; }
+.btn-instagram svg { fill: #fff; flex-shrink: 0; }
+
+.btn-instagram-detalhe {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #E1306C;
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-left: 8px;
+}
+.btn-instagram-detalhe:hover { opacity: 0.88; }
+.btn-instagram-detalhe svg { fill: #fff; flex-shrink: 0; }
+
 /* ── Tags ────────────────────────────────────────────────── */
 .tag {
   display: inline-block;
@@ -299,9 +331,12 @@ a { color: inherit; text-decoration: none; }
 .etapa-novo-lead       { background: #1c3557; color: #7eb8f7; }
 .etapa-tentando-contato { background: #2a2011; color: #f0a500; }
 .etapa-contato-feito   { background: #1a2f1a; color: #4caf7d; }
-.etapa-consulta-agendada { background: #2a1a2a; color: #c084fc; }
-.etapa-fechado         { background: #162a1e; color: #34d399; }
-.etapa-perdido         { background: #2a1515; color: var(--danger); }
+.etapa-consulta-agendada  { background: #2a1a2a; color: #c084fc; }
+.etapa-proposta-enviada   { background: #1a1a2e; color: #c084fc; }
+.etapa-em-negociação      { background: #1a2a1a; color: #4caf7d; }
+.etapa-negócio-fechado    { background: #162a1e; color: #34d399; }
+.etapa-fechado            { background: #162a1e; color: #34d399; }
+.etapa-perdido            { background: #2a1515; color: var(--danger); }
 
 /* ── Leads table ─────────────────────────────────────────── */
 .filter-bar {
