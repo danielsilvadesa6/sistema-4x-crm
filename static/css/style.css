@@ -317,6 +317,7 @@ a { color: inherit; text-decoration: none; }
 }
 .tag-seg  { background: #1e3a5f; color: #7eb8f7; }
 .tag-orig { background: #2d2011; color: var(--copper); }
+.tag-camp { background: #1a2a1a; color: #6ee7b7; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
 
 /* ── Etapa badges ────────────────────────────────────────── */
 .etapa-badge {

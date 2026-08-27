@@ -223,7 +223,7 @@ def init_db():
         colunas = [r[1] for r in conn.execute("PRAGMA table_info(leads)").fetchall()]
 
     for col, tipo in [("custo_aquisicao", "REAL"), ("lembrete_em", "TEXT"), ("lembrete_nota", "TEXT"),
-                       ("usuario_id", "INTEGER"), ("instagram", "TEXT")]:
+                       ("usuario_id", "INTEGER"), ("instagram", "TEXT"), ("campanha", "TEXT")]:
         if col not in colunas:
             conn.execute(f"ALTER TABLE leads ADD COLUMN {col} {tipo}")
 
@@ -678,7 +678,8 @@ def pipeline():
             d = dias_sem_contato(l["id"], l["criado_em"], conn)
             cards.append({
                 "id": l["id"], "nome": l["nome"], "segmento": l["segmento"],
-                "origem": l["origem"], "dias_sem_contato": d, "alerta": d > 7,
+                "origem": l["origem"], "campanha": l["campanha"],
+                "dias_sem_contato": d, "alerta": d > 7,
                 "etapa": l["etapa"], "whatsapp_link": whatsapp_link(l["whatsapp"]),
                 "instagram_link": instagram_link(l["instagram"])
             })
@@ -927,6 +928,49 @@ def api_lead(lead_id):
     if not lead:
         return jsonify({}), 404
     return jsonify(dict(lead))
+
+
+@app.route("/api/leads/webhook-clique", methods=["GET", "POST"])
+def webhook_clique():
+    """Captura cliques em botão de WhatsApp via GTM com parâmetros UTM."""
+    if request.method == "POST":
+        data = request.get_json(silent=True) or request.form
+    else:
+        data = request.args
+
+    usuario_id   = data.get("usuario_id")
+    utm_source   = (data.get("utm_source")   or "").strip()[:120]
+    utm_medium   = (data.get("utm_medium")   or "").strip()[:120]
+    utm_campaign = (data.get("utm_campaign") or "").strip()[:255]
+
+    if not usuario_id:
+        return jsonify({"ok": False, "erro": "usuario_id obrigatório"}), 400
+
+    try:
+        usuario_id = int(usuario_id)
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "erro": "usuario_id inválido"}), 400
+
+    conn = get_db()
+    usuario = conn.execute("SELECT id FROM usuarios WHERE id=%s AND ativo=%s", (usuario_id, 1)).fetchone()
+    if not usuario:
+        conn.close()
+        return jsonify({"ok": False, "erro": "Usuário não encontrado"}), 404
+
+    nome_lead = "Lead via " + (utm_source.title() if utm_source else "Clique")
+    origem    = utm_source or "Orgânico"
+
+    conn.execute("""
+        INSERT INTO leads (nome, whatsapp, origem, campanha, etapa, usuario_id,
+                           criado_em, atualizado_em)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW()::text, NOW()::text)
+    """, (nome_lead, "", origem, utm_campaign or None, "Novo Lead", usuario_id))
+    conn.commit()
+    lead_id = conn.execute("SELECT id FROM leads WHERE usuario_id=%s ORDER BY id DESC LIMIT 1", (usuario_id,)).fetchone()["id"]
+    conn.close()
+
+    app.logger.info(f"[WEBHOOK] Lead #{lead_id} criado via UTM: source={utm_source} medium={utm_medium} campaign={utm_campaign}")
+    return jsonify({"ok": True, "lead_id": lead_id}), 201
 
 
 # ─── Relatórios ───────────────────────────────────────────────────────────────
