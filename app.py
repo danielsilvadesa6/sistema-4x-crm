@@ -681,7 +681,8 @@ def pipeline():
                 "origem": l["origem"], "campanha": l["campanha"],
                 "dias_sem_contato": d, "alerta": d > 7,
                 "etapa": l["etapa"], "whatsapp_link": whatsapp_link(l["whatsapp"]),
-                "instagram_link": instagram_link(l["instagram"])
+                "instagram_link": instagram_link(l["instagram"]),
+                "criado_em": str(l["criado_em"])[:16].replace("T", " ") if l["criado_em"] else None,
             })
         colunas[e] = cards
     conn.close()
@@ -1371,6 +1372,7 @@ def admin_ver_pipeline(usuario_id):
                 "dias_sem_contato": d, "alerta": d > 7,
                 "etapa": l["etapa"], "whatsapp_link": whatsapp_link(l["whatsapp"]),
                 "instagram_link": instagram_link(l["instagram"]),
+                "criado_em": str(l["criado_em"])[:16].replace("T", " ") if l["criado_em"] else None,
             })
         colunas[e] = cards
     conn.close()

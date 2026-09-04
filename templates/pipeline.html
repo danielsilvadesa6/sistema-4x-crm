@@ -68,6 +68,9 @@
           {% else %}
           <span class="card-dias">{{ card.dias_sem_contato }}d sem contato</span>
           {% endif %}
+          {% if card.criado_em %}
+          <span class="card-criado-em">📅 {{ card.criado_em }}</span>
+          {% endif %}
         </div>
       </div>
       {% else %}
