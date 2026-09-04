@@ -1349,6 +1349,35 @@ def admin_desativar_usuario(usuario_id):
     return redirect(url_for("admin_usuarios"))
 
 
+@app.route("/admin/usuario/<int:usuario_id>/pipeline")
+@admin_required
+def admin_ver_pipeline(usuario_id):
+    conn = get_db()
+    alvo = conn.execute("SELECT id, nome, email FROM usuarios WHERE id=%s", (usuario_id,)).fetchone()
+    if not alvo:
+        conn.close()
+        return "Usuário não encontrado", 404
+
+    colunas = {}
+    for e in ETAPAS:
+        cards = []
+        for l in conn.execute(
+            "SELECT * FROM leads WHERE usuario_id=%s AND etapa=%s ORDER BY atualizado_em DESC", (usuario_id, e)
+        ).fetchall():
+            d = dias_sem_contato(l["id"], l["criado_em"], conn)
+            cards.append({
+                "id": l["id"], "nome": l["nome"], "segmento": l["segmento"],
+                "origem": l["origem"], "campanha": l["campanha"],
+                "dias_sem_contato": d, "alerta": d > 7,
+                "etapa": l["etapa"], "whatsapp_link": whatsapp_link(l["whatsapp"]),
+                "instagram_link": instagram_link(l["instagram"]),
+            })
+        colunas[e] = cards
+    conn.close()
+    return render_template("pipeline.html", colunas=colunas, etapas=ETAPAS,
+                           admin_view=alvo["nome"])
+
+
 init_db()
 
 if __name__ == "__main__":

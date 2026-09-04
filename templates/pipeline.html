@@ -3,9 +3,19 @@
 
 {% block content %}
 <div class="page-header">
-  <h1>Pipeline Kanban</h1>
-  <span class="subtitle">Arraste os cards entre as colunas</span>
+  <div>
+    {% if admin_view %}
+    <a href="{{ url_for('admin_usuarios') }}" class="back-link">← Usuários</a>
+    {% endif %}
+    <h1>Pipeline Kanban{% if admin_view %} — {{ admin_view }}{% endif %}</h1>
+    <span class="subtitle">{% if admin_view %}Visualização admin (somente leitura){% else %}Arraste os cards entre as colunas{% endif %}</span>
+  </div>
 </div>
+{% if admin_view %}
+<div style="background:#2a1a00;border:1px solid var(--copper);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:13px;color:var(--copper)">
+  👁 Você está visualizando o pipeline de <strong>{{ admin_view }}</strong> como administrador. Nenhuma ação está disponível nesta visualização.
+</div>
+{% endif %}
 
 <!-- Navegação mobile entre colunas -->
 <div class="kanban-nav" id="kanban-nav">

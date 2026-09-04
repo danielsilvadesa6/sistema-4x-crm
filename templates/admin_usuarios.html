@@ -29,7 +29,8 @@
         <td><span class="badge-perfil {% if u.ativo %}badge-ativo{% else %}badge-inativo{% endif %}">{{ 'Ativo' if u.ativo else 'Inativo' }}</span></td>
         <td>{{ u.total_leads }}</td>
         <td><span class="text-muted">{{ u.criado_em[:10] if u.criado_em else '—' }}</span></td>
-        <td style="display:flex;gap:6px">
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <a href="{{ url_for('admin_ver_pipeline', usuario_id=u.id) }}" class="btn btn-sm btn-primary">Ver CRM</a>
           <a href="{{ url_for('admin_editar_usuario', usuario_id=u.id) }}" class="btn btn-sm">Editar</a>
           {% if u.id != current_user.id %}
           <form method="post" action="{{ url_for('admin_desativar_usuario', usuario_id=u.id) }}">
