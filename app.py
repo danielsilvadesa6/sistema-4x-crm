@@ -849,7 +849,9 @@ def concluir_lembrete(lead_id):
     conn.commit()
     conn.close()
     volta = request.form.get("volta", "dashboard")
-    return redirect(url_for(volta) if volta in ("dashboard", "ver_lead") else url_for("dashboard"))
+    if volta == "ver_lead":
+        return redirect(url_for("ver_lead", lead_id=lead_id))
+    return redirect(url_for("dashboard"))
 
 
 # ─── API Kanban ───────────────────────────────────────────────────────────────
