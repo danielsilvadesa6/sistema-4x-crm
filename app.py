@@ -933,9 +933,17 @@ def api_lead(lead_id):
     return jsonify(dict(lead))
 
 
-@app.route("/api/leads/webhook-clique", methods=["GET", "POST"])
+@app.route("/api/leads/webhook-clique", methods=["GET", "POST", "OPTIONS"])
 def webhook_clique():
     """Captura cliques em botão de WhatsApp via GTM com parâmetros UTM."""
+    cors_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    }
+    if request.method == "OPTIONS":
+        return ("", 204, cors_headers)
+
     if request.method == "POST":
         data = request.get_json(silent=True) or request.form
     else:
@@ -949,18 +957,18 @@ def webhook_clique():
     whatsapp_param = (data.get("whatsapp")   or "").strip()[:30]
 
     if not usuario_id:
-        return jsonify({"ok": False, "erro": "usuario_id obrigatório"}), 400
+        return jsonify({"ok": False, "erro": "usuario_id obrigatório"}), 400, cors_headers
 
     try:
         usuario_id = int(usuario_id)
     except (ValueError, TypeError):
-        return jsonify({"ok": False, "erro": "usuario_id inválido"}), 400
+        return jsonify({"ok": False, "erro": "usuario_id inválido"}), 400, cors_headers
 
     conn = get_db()
     usuario = conn.execute("SELECT id FROM usuarios WHERE id=%s AND ativo=%s", (usuario_id, 1)).fetchone()
     if not usuario:
         conn.close()
-        return jsonify({"ok": False, "erro": "Usuário não encontrado"}), 404
+        return jsonify({"ok": False, "erro": "Usuário não encontrado"}), 404, cors_headers
 
     nome_lead = nome_param if nome_param else ("Lead via " + (utm_source.title() if utm_source else "Clique"))
     origem    = utm_source or "Orgânico"
@@ -975,7 +983,9 @@ def webhook_clique():
     conn.close()
 
     app.logger.info(f"[WEBHOOK] Lead #{lead_id} criado via UTM: source={utm_source} medium={utm_medium} campaign={utm_campaign}")
-    return jsonify({"ok": True, "lead_id": lead_id}), 201
+    resp = jsonify({"ok": True, "lead_id": lead_id})
+    resp.headers.update(cors_headers)
+    return resp, 201
 
 
 # ─── Relatórios ───────────────────────────────────────────────────────────────
