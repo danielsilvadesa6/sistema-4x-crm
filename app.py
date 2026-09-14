@@ -945,6 +945,8 @@ def webhook_clique():
     utm_source   = (data.get("utm_source")   or "").strip()[:120]
     utm_medium   = (data.get("utm_medium")   or "").strip()[:120]
     utm_campaign = (data.get("utm_campaign") or "").strip()[:255]
+    nome_param   = (data.get("nome")         or "").strip()[:200]
+    whatsapp_param = (data.get("whatsapp")   or "").strip()[:30]
 
     if not usuario_id:
         return jsonify({"ok": False, "erro": "usuario_id obrigatório"}), 400
@@ -960,14 +962,14 @@ def webhook_clique():
         conn.close()
         return jsonify({"ok": False, "erro": "Usuário não encontrado"}), 404
 
-    nome_lead = "Lead via " + (utm_source.title() if utm_source else "Clique")
+    nome_lead = nome_param if nome_param else ("Lead via " + (utm_source.title() if utm_source else "Clique"))
     origem    = utm_source or "Orgânico"
 
     conn.execute("""
         INSERT INTO leads (nome, whatsapp, origem, campanha, etapa, usuario_id,
                            criado_em, atualizado_em)
         VALUES (%s, %s, %s, %s, %s, %s, NOW()::text, NOW()::text)
-    """, (nome_lead, "", origem, utm_campaign or None, "Novo Lead", usuario_id))
+    """, (nome_lead, whatsapp_param, origem, utm_campaign or None, "Novo Lead", usuario_id))
     conn.commit()
     lead_id = conn.execute("SELECT id FROM leads WHERE usuario_id=%s ORDER BY id DESC LIMIT 1", (usuario_id,)).fetchone()["id"]
     conn.close()
