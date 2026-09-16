@@ -156,6 +156,10 @@ function salvarCampoEMover(campo) {
     .catch(() => mostrarAviso('Erro ao salvar. Tente novamente.'));
 }
 
+function mostrarAviso(msg) {
+  alert(msg);
+}
+
 function mostrarAvisoModal(msg) {
   alert(msg);
 }

@@ -873,8 +873,14 @@ def api_mover():
         return jsonify({"ok": False, "erro": "Lead não encontrado"}), 404
 
     etapa_atual = lead["etapa"]
+    etapas_idx  = {e: i for i, e in enumerate(ETAPAS)}
+    idx_atual   = etapas_idx.get(etapa_atual, -1)
+    idx_novo    = etapas_idx.get(nova_etapa, -1)
+
     erro = None
-    if nova_etapa == "Tentando Contato" and etapa_atual == "Novo Lead":
+    if nova_etapa != "Perdido" and idx_novo > idx_atual + 1:
+        erro = "Avance uma etapa por vez no pipeline."
+    elif nova_etapa == "Tentando Contato" and etapa_atual == "Novo Lead":
         if not lead["whatsapp"]:
             erro = "Preencha o WhatsApp do lead antes de avançar."
     elif nova_etapa == "Contato Feito" and etapa_atual == "Tentando Contato":
