@@ -73,7 +73,7 @@ if USE_PG:
 
 ETAPAS = ["Novo Lead", "Tentando Contato", "Contato Feito", "Proposta Enviada", "Em Negociação", "Negócio Fechado", "Perdido"]
 SEGMENTOS       = ["Advocacia", "Clínica Médica", "Odontologia", "Psicologia", "Veterinária", "Outro"]
-ORIGENS         = ["Google Ads", "Instagram", "Indicação", "Site", "WhatsApp direto", "Outro"]
+ORIGENS         = ["Google Ads", "Instagram", "YouTube", "Indicação", "Site", "WhatsApp direto", "Outro"]
 TIPOS_INTERACAO = ["WhatsApp", "Ligação", "E-mail", "Reunião", "Presencial", "Outro"]
 
 # ─── Camada de compatibilidade SQLite ↔ PostgreSQL ───────────────────────────
