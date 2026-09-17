@@ -878,28 +878,17 @@ def api_mover():
     idx_novo    = etapas_idx.get(nova_etapa, -1)
 
     erro = None
-    if nova_etapa != "Perdido" and idx_novo > idx_atual + 1:
-        erro = "Avance uma etapa por vez no pipeline."
-    elif nova_etapa == "Tentando Contato" and etapa_atual == "Novo Lead":
-        if not lead["whatsapp"]:
-            erro = "Preencha o WhatsApp do lead antes de avançar."
-    elif nova_etapa == "Contato Feito" and etapa_atual == "Tentando Contato":
-        n = conn.execute("SELECT COUNT(*) FROM interacoes WHERE lead_id=%s", (lead_id,)).fetchone()[0]
-        if n == 0:
-            erro = "Registre pelo menos 1 interação antes de avançar."
-    elif nova_etapa == "Proposta Enviada" and etapa_atual == "Contato Feito":
+    if idx_novo > idx_atual:
+        # Avanço: exige observações preenchidas em qualquer transição
         if not lead["observacoes"]:
-            erro = "Preencha as observações do lead antes de enviar a proposta."
-    elif nova_etapa == "Em Negociação" and etapa_atual == "Proposta Enviada":
-        n = conn.execute("SELECT COUNT(*) FROM interacoes WHERE lead_id=%s", (lead_id,)).fetchone()[0]
-        if n == 0:
-            erro = "Registre pelo menos 1 interação antes de avançar para Em Negociação."
-    elif nova_etapa == "Negócio Fechado" and etapa_atual == "Em Negociação":
-        if not lead["valor_servico"]:
+            erro = "Preencha as observações do lead antes de avançar."
+        # Requisitos adicionais por etapa de destino
+        elif nova_etapa == "Tentando Contato" and not lead["whatsapp"]:
+            erro = "Preencha o WhatsApp do lead antes de avançar."
+        elif nova_etapa == "Negócio Fechado" and not lead["valor_servico"]:
             erro = "Preencha o valor do serviço antes de fechar o negócio."
-    elif nova_etapa == "Perdido":
-        if not lead["motivo_perda"]:
-            erro = "Informe o motivo da perda antes de mover para Perdido."
+    if nova_etapa == "Perdido" and not lead["motivo_perda"]:
+        erro = "Informe o motivo da perda antes de mover para Perdido."
 
     if erro:
         conn.close()

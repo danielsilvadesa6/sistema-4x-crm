@@ -56,18 +56,16 @@ function tentarMover(leadId, novaEtapa) {
   .catch(() => mostrarAviso('Erro de conexão. Tente novamente.'));
 }
 
-// Retorna qual campo precisa ser preenchido para cada transição
+const ORDEM_ETAPAS = ["Novo Lead","Tentando Contato","Contato Feito","Proposta Enviada","Em Negociação","Negócio Fechado","Perdido"];
+
+// Retorna qual campo abrir no modal quando o backend rejeitar a transição
 function campoNecessario(de, para) {
-  const mapa = {
-    'Novo Lead→Tentando Contato':        { tipo: 'text',   nome: 'whatsapp',      label: 'WhatsApp' },
-    'Contato Feito→Proposta Enviada':    { tipo: 'text',   nome: 'observacoes',   label: 'Observações' },
-    'Em Negociação→Negócio Fechado':     { tipo: 'number', nome: 'valor_servico', label: 'Valor do Serviço (R$)' },
-    'qualquer→Perdido':                  { tipo: 'text',   nome: 'motivo_perda',  label: 'Motivo da Perda' },
-  };
-  const chave = `${de}→${para}`;
-  if (mapa[chave]) return mapa[chave];
-  if (para === 'Perdido') return mapa['qualquer→Perdido'];
-  return null;
+  if (para === 'Perdido') return { tipo: 'text', nome: 'motivo_perda', label: 'Motivo da Perda' };
+  const avancando = ORDEM_ETAPAS.indexOf(para) > ORDEM_ETAPAS.indexOf(de);
+  if (!avancando) return null;
+  if (para === 'Tentando Contato') return { tipo: 'text', nome: 'whatsapp', label: 'WhatsApp' };
+  if (para === 'Negócio Fechado')  return { tipo: 'number', nome: 'valor_servico', label: 'Valor do Serviço (R$)' };
+  return { tipo: 'text', nome: 'observacoes', label: 'Observações' };
 }
 
 // ── Modal de campo obrigatório ───────────────────────────────────────────────
