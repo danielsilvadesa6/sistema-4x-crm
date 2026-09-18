@@ -968,6 +968,18 @@ def webhook_clique():
     nome_lead = nome_param if nome_param else ("Lead via " + (utm_source.title() if utm_source else "Clique"))
     origem    = utm_source or "Orgânico"
 
+    # Deduplicação: ignora se já existe lead com mesmo whatsapp criado nos últimos 5 minutos
+    if whatsapp_param:
+        duplicado = conn.execute("""
+            SELECT id FROM leads
+            WHERE usuario_id=%s AND whatsapp=%s
+              AND criado_em::timestamp >= (NOW() AT TIME ZONE 'America/Sao_Paulo') - INTERVAL '5 minutes'
+            LIMIT 1
+        """, (usuario_id, whatsapp_param)).fetchone()
+        if duplicado:
+            conn.close()
+            return jsonify({"ok": True, "lead_id": duplicado["id"], "duplicado": True}), 200, cors_headers
+
     conn.execute("""
         INSERT INTO leads (nome, whatsapp, origem, campanha, etapa, usuario_id,
                            criado_em, atualizado_em)
