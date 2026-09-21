@@ -878,17 +878,17 @@ def api_mover():
     idx_novo    = etapas_idx.get(nova_etapa, -1)
 
     erro = None
-    if idx_novo > idx_atual:
+    if nova_etapa == "Perdido":
+        if not lead["motivo_perda"]:
+            erro = "Informe o motivo da perda antes de mover para Perdido."
+    elif idx_novo > idx_atual:
         # Avanço: exige observações preenchidas em qualquer transição
         if not lead["observacoes"]:
             erro = "Preencha as observações do lead antes de avançar."
-        # Requisitos adicionais por etapa de destino
         elif nova_etapa == "Tentando Contato" and not lead["whatsapp"]:
             erro = "Preencha o WhatsApp do lead antes de avançar."
         elif nova_etapa == "Negócio Fechado" and not lead["valor_servico"]:
             erro = "Preencha o valor do serviço antes de fechar o negócio."
-    if nova_etapa == "Perdido" and not lead["motivo_perda"]:
-        erro = "Informe o motivo da perda antes de mover para Perdido."
 
     if erro:
         conn.close()
