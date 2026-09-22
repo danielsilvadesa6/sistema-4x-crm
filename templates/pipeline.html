@@ -112,34 +112,38 @@
   scrollbar-width: thin;
   scrollbar-color: var(--copper) var(--bg2);
 ">
-  <div id="kanban-scrollbar-inner" style="height: 1px;"></div>
+  <div id="kanban-scrollbar-inner" style="height: 1px; width: 100px;"></div>
 </div>
-<div style="height:14px"></div>
+<div style="height: 14px;"></div>
 
 <script>
 (function () {
-  var board   = document.getElementById('kanban');
-  var wrap    = document.getElementById('kanban-scrollbar-wrap');
-  var inner   = document.getElementById('kanban-scrollbar-inner');
+  var board = document.getElementById('kanban');
+  var wrap  = document.getElementById('kanban-scrollbar-wrap');
+  var inner = document.getElementById('kanban-scrollbar-inner');
+  var fromWrap = false, fromBoard = false;
 
-  function syncInnerWidth() {
+  function updateWidth() {
     inner.style.width = board.scrollWidth + 'px';
   }
-  syncInnerWidth();
-  new ResizeObserver(syncInnerWidth).observe(board);
 
-  var syncing = false;
+  // Atualiza largura ao carregar e quando o conteúdo muda
+  updateWidth();
+  window.addEventListener('load', updateWidth);
+  setTimeout(updateWidth, 500);
+
   wrap.addEventListener('scroll', function () {
-    if (syncing) return;
-    syncing = true;
+    if (fromBoard) return;
+    fromWrap = true;
     board.scrollLeft = wrap.scrollLeft;
-    syncing = false;
+    fromWrap = false;
   });
+
   board.addEventListener('scroll', function () {
-    if (syncing) return;
-    syncing = true;
+    if (fromWrap) return;
+    fromBoard = true;
     wrap.scrollLeft = board.scrollLeft;
-    syncing = false;
+    fromBoard = false;
   });
 })();
 </script>
