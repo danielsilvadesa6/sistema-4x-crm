@@ -56,7 +56,7 @@ function tentarMover(leadId, novaEtapa) {
   .catch(() => mostrarAviso('Erro de conexão. Tente novamente.'));
 }
 
-const ORDEM_ETAPAS = ["Novo Lead","Tentando Contato","Contato Feito","Proposta Enviada","Em Negociação","Negócio Fechado","Perdido"];
+const ORDEM_ETAPAS = ["Novo Lead","Tentando Contato","Contato Feito","Proposta Enviada","Em Negociação","Negócio Fechado","Follow-up","Perdido"];
 
 // Retorna qual campo abrir no modal quando o backend rejeitar a transição
 function campoNecessario(de, para) {
