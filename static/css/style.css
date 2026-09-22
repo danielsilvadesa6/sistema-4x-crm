@@ -183,7 +183,8 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   gap: 14px;
   overflow-x: scroll;
-  padding-bottom: 16px;
+  overflow-y: hidden;
+  height: calc(100vh - 175px);
   align-items: flex-start;
   scrollbar-width: thin;
   scrollbar-color: var(--copper) var(--bg2);
@@ -194,6 +195,9 @@ a { color: inherit; text-decoration: none; }
 .kanban-col {
   flex: 0 0 220px;
   min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 .col-header {
   display: flex;
@@ -223,6 +227,8 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-y: auto;
+  flex: 1;
 }
 .col-empty { text-align: center; color: var(--text2); font-size: 12px; padding: 16px 0; }
 
