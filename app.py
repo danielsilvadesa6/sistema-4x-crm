@@ -642,7 +642,7 @@ def dashboard():
 
     atrasados = []
     for l in conn.execute(
-        "SELECT * FROM leads WHERE usuario_id=%s AND etapa NOT IN ('Negócio Fechado','Perdido')", (uid,)
+        "SELECT * FROM leads WHERE usuario_id=%s AND etapa NOT IN ('Negócio Fechado','Fechado','Perdido')", (uid,)
     ).fetchall():
         d = dias_sem_contato(l["id"], l["criado_em"], conn)
         if d > 7:
