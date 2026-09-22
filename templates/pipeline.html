@@ -97,36 +97,49 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/kanban.js') }}"></script>
+
+<!-- Barra de scroll fixa na parte inferior da tela -->
+<div id="kanban-scrollbar-wrap" style="
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 14px;
+  background: var(--bg2);
+  z-index: 999;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--copper) var(--bg2);
+">
+  <div id="kanban-scrollbar-inner" style="height: 1px;"></div>
+</div>
+<div style="height:14px"></div>
+
 <script>
 (function () {
-  var board = document.getElementById('kanban');
-  var info  = document.getElementById('kanban-nav-info');
-  var total = document.querySelectorAll('.kanban-col').length;
-  var current = 0;
+  var board   = document.getElementById('kanban');
+  var wrap    = document.getElementById('kanban-scrollbar-wrap');
+  var inner   = document.getElementById('kanban-scrollbar-inner');
 
-  function update() {
-    if (info) info.textContent = (current + 1) + ' / ' + total;
+  function syncInnerWidth() {
+    inner.style.width = board.scrollWidth + 'px';
   }
+  syncInnerWidth();
+  new ResizeObserver(syncInnerWidth).observe(board);
 
-  window.kanbanNav = function (dir) {
-    current = Math.max(0, Math.min(total - 1, current + dir));
-    var cols = board.querySelectorAll('.kanban-col');
-    if (cols[current]) {
-      cols[current].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
-    }
-    update();
-  };
-
-  // Detecta scroll manual e atualiza índice
+  var syncing = false;
+  wrap.addEventListener('scroll', function () {
+    if (syncing) return;
+    syncing = true;
+    board.scrollLeft = wrap.scrollLeft;
+    syncing = false;
+  });
   board.addEventListener('scroll', function () {
-    var cols = board.querySelectorAll('.kanban-col');
-    var scrollLeft = board.scrollLeft;
-    var idx = 0;
-    cols.forEach(function (col, i) {
-      if (col.offsetLeft - board.offsetLeft <= scrollLeft + 20) idx = i;
-    });
-    current = idx;
-    update();
+    if (syncing) return;
+    syncing = true;
+    wrap.scrollLeft = board.scrollLeft;
+    syncing = false;
   });
 })();
 </script>
