@@ -735,7 +735,13 @@ textarea.input { resize: vertical; }
 .mobile-header { display: none; }
 .sidebar-overlay { display: none; }
 .leads-cards-mobile { display: none; }
-.kanban-nav { display: none; }
+.kanban-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
 
 /* ── Responsive: 768px ───────────────────────────────────── */
 @media (max-width: 768px) {
