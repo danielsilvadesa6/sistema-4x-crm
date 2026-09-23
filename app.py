@@ -1401,34 +1401,6 @@ def admin_ver_pipeline(usuario_id):
                            admin_view=alvo["nome"])
 
 
-# ─── ROTA TEMPORÁRIA DE LIMPEZA ─────────────────────────────────────────────
-_CLEANUP_TOKEN = "sistema4x-limpar-leads-9f3k2p"
-
-@app.route(f"/admin/cleanup-leads/{_CLEANUP_TOKEN}", methods=["POST"])
-def cleanup_tentando_contato():
-    email = request.json.get("email", "")
-    conn = get_db()
-    usuario = conn.execute("SELECT id FROM usuarios WHERE LOWER(email)=LOWER(%s)", (email,)).fetchone()
-    if not usuario:
-        todos = conn.execute("SELECT id, nome, email FROM usuarios").fetchall()
-        conn.close()
-        return jsonify({"erro": "Usuário não encontrado", "usuarios": [{"id": u["id"], "nome": u["nome"], "email": u["email"]} for u in todos]}), 404
-    uid = usuario["id"]
-    result = conn.execute(
-        "SELECT id, nome FROM leads WHERE usuario_id=%s AND etapa='Tentando Contato'",
-        (uid,)
-    ).fetchall()
-    ids = [r["id"] for r in result]
-    nomes = [r["nome"] for r in result]
-    preview = request.args.get("preview") == "1"
-    if ids and not preview:
-        placeholders = ",".join(["%s"] * len(ids)) if USE_PG else ",".join(["?"] * len(ids))
-        conn.execute(f"DELETE FROM leads WHERE id IN ({placeholders})", ids)
-        conn.commit()
-    conn.close()
-    return jsonify({"preview": preview, "total": len(ids), "nomes": nomes})
-# ─── FIM ROTA TEMPORÁRIA ─────────────────────────────────────────────────────
-
 
 init_db()
 
