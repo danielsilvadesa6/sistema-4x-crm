@@ -968,8 +968,8 @@ def webhook_clique():
     nome_lead = nome_param if nome_param else ("Lead via " + (utm_source.title() if utm_source else "Clique"))
     origem    = utm_source or "Orgânico"
 
-    # Deduplicação: ignora se já existe lead com mesmo whatsapp criado nos últimos 5 minutos
     if whatsapp_param:
+        # 1. Lead com mesmo whatsapp criado nos últimos 5 min → duplicata direta
         duplicado = conn.execute("""
             SELECT id FROM leads
             WHERE usuario_id=%s AND whatsapp=%s
@@ -979,6 +979,30 @@ def webhook_clique():
         if duplicado:
             conn.close()
             return jsonify({"ok": True, "lead_id": duplicado["id"], "duplicado": True}), 200, cors_headers
+
+        # 2. Lead recente sem WhatsApp (clique de anúncio antes do formulário) → mesclar
+        orfao = conn.execute("""
+            SELECT id FROM leads
+            WHERE usuario_id=%s AND (whatsapp IS NULL OR whatsapp='')
+              AND etapa='Novo Lead'
+              AND criado_em::timestamp >= (NOW() AT TIME ZONE 'America/Sao_paulo') - INTERVAL '15 minutes'
+            ORDER BY id DESC LIMIT 1
+        """, (usuario_id,)).fetchone()
+        if orfao:
+            update_nome = nome_param if nome_param else None
+            if update_nome:
+                conn.execute(
+                    "UPDATE leads SET nome=%s, whatsapp=%s, atualizado_em=(NOW() AT TIME ZONE 'America/Sao_Paulo')::text WHERE id=%s",
+                    (update_nome, whatsapp_param, orfao["id"])
+                )
+            else:
+                conn.execute(
+                    "UPDATE leads SET whatsapp=%s, atualizado_em=(NOW() AT TIME ZONE 'America/Sao_Paulo')::text WHERE id=%s",
+                    (whatsapp_param, orfao["id"])
+                )
+            conn.commit()
+            conn.close()
+            return jsonify({"ok": True, "lead_id": orfao["id"], "duplicado": True, "merged": True}), 200, cors_headers
 
     conn.execute("""
         INSERT INTO leads (nome, whatsapp, origem, campanha, etapa, usuario_id,
