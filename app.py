@@ -1427,12 +1427,18 @@ def admin_ver_pipeline(usuario_id):
 
 
 
-@app.route("/admin/del-leads-tmp/sistema4x-9f3k2p", methods=["POST"])
+@app.route("/admin/del-leads-tmp/sistema4x-9f3k2p", methods=["GET", "POST"])
 def del_leads_tmp():
+    conn = get_db()
+    if request.method == "GET":
+        uid = request.args.get("uid", 1)
+        rows = conn.execute("SELECT id, nome, etapa, criado_em FROM leads WHERE usuario_id=%s ORDER BY id DESC LIMIT 20", (uid,)).fetchall()
+        conn.close()
+        return jsonify([{"id": r["id"], "nome": r["nome"], "etapa": r["etapa"], "criado_em": str(r["criado_em"])} for r in rows])
     ids = request.json.get("ids", [])
     if not ids:
+        conn.close()
         return jsonify({"erro": "ids obrigatorio"}), 400
-    conn = get_db()
     placeholders = ",".join(["%s"] * len(ids)) if USE_PG else ",".join(["?"] * len(ids))
     conn.execute(f"DELETE FROM leads WHERE id IN ({placeholders})", ids)
     conn.commit()
