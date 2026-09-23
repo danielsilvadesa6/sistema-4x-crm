@@ -1420,12 +1420,13 @@ def cleanup_tentando_contato():
     ).fetchall()
     ids = [r["id"] for r in result]
     nomes = [r["nome"] for r in result]
-    if ids:
+    preview = request.args.get("preview") == "1"
+    if ids and not preview:
         placeholders = ",".join(["%s"] * len(ids)) if USE_PG else ",".join(["?"] * len(ids))
         conn.execute(f"DELETE FROM leads WHERE id IN ({placeholders})", ids)
         conn.commit()
     conn.close()
-    return jsonify({"deletados": len(ids), "nomes": nomes})
+    return jsonify({"preview": preview, "total": len(ids), "nomes": nomes})
 # ─── FIM ROTA TEMPORÁRIA ─────────────────────────────────────────────────────
 
 
