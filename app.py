@@ -969,7 +969,7 @@ def webhook_clique():
     origem    = utm_source or "Orgânico"
 
     if whatsapp_param:
-        # 1. Lead com mesmo whatsapp criado nos últimos 5 min → duplicata direta
+        # Lead com mesmo whatsapp nos últimos 5 min → duplicata direta
         duplicado = conn.execute("""
             SELECT id FROM leads
             WHERE usuario_id=%s AND whatsapp=%s
@@ -979,30 +979,18 @@ def webhook_clique():
         if duplicado:
             conn.close()
             return jsonify({"ok": True, "lead_id": duplicado["id"], "duplicado": True}), 200, cors_headers
-
-        # 2. Lead recente sem WhatsApp (clique de anúncio antes do formulário) → mesclar
-        orfao = conn.execute("""
+    else:
+        # Lead SEM WhatsApp (disparo GTM/pixel): se já existe lead recente com WhatsApp → ignorar
+        recente = conn.execute("""
             SELECT id FROM leads
-            WHERE usuario_id=%s AND (whatsapp IS NULL OR whatsapp='')
+            WHERE usuario_id=%s AND whatsapp IS NOT NULL AND whatsapp<>''
               AND etapa='Novo Lead'
-              AND criado_em::timestamp >= (NOW() AT TIME ZONE 'America/Sao_paulo') - INTERVAL '15 minutes'
+              AND criado_em::timestamp >= (NOW() AT TIME ZONE 'America/Sao_Paulo') - INTERVAL '3 minutes'
             ORDER BY id DESC LIMIT 1
         """, (usuario_id,)).fetchone()
-        if orfao:
-            update_nome = nome_param if nome_param else None
-            if update_nome:
-                conn.execute(
-                    "UPDATE leads SET nome=%s, whatsapp=%s, atualizado_em=(NOW() AT TIME ZONE 'America/Sao_Paulo')::text WHERE id=%s",
-                    (update_nome, whatsapp_param, orfao["id"])
-                )
-            else:
-                conn.execute(
-                    "UPDATE leads SET whatsapp=%s, atualizado_em=(NOW() AT TIME ZONE 'America/Sao_Paulo')::text WHERE id=%s",
-                    (whatsapp_param, orfao["id"])
-                )
-            conn.commit()
+        if recente:
             conn.close()
-            return jsonify({"ok": True, "lead_id": orfao["id"], "duplicado": True, "merged": True}), 200, cors_headers
+            return jsonify({"ok": True, "lead_id": recente["id"], "duplicado": True, "skipped": True}), 200, cors_headers
 
     conn.execute("""
         INSERT INTO leads (nome, whatsapp, origem, campanha, etapa, usuario_id,
@@ -1426,24 +1414,6 @@ def admin_ver_pipeline(usuario_id):
 
 
 
-
-@app.route("/admin/del-leads-tmp/sistema4x-9f3k2p", methods=["GET", "POST"])
-def del_leads_tmp():
-    conn = get_db()
-    if request.method == "GET":
-        uid = request.args.get("uid", 1)
-        rows = conn.execute("SELECT id, nome, etapa, criado_em FROM leads WHERE usuario_id=%s ORDER BY id DESC LIMIT 20", (uid,)).fetchall()
-        conn.close()
-        return jsonify([{"id": r["id"], "nome": r["nome"], "etapa": r["etapa"], "criado_em": str(r["criado_em"])} for r in rows])
-    ids = request.json.get("ids", [])
-    if not ids:
-        conn.close()
-        return jsonify({"erro": "ids obrigatorio"}), 400
-    placeholders = ",".join(["%s"] * len(ids)) if USE_PG else ",".join(["?"] * len(ids))
-    conn.execute(f"DELETE FROM leads WHERE id IN ({placeholders})", ids)
-    conn.commit()
-    conn.close()
-    return jsonify({"deletados": len(ids)})
 
 
 init_db()
