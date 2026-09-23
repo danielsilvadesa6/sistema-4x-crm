@@ -1402,41 +1402,6 @@ def admin_ver_pipeline(usuario_id):
 
 
 
-# ─── ROTA TEMPORÁRIA DE LIMPEZA GERAL ────────────────────────────────────────
-_CLEANUP_TOKEN = "sistema4x-limpar-leads-9f3k2p"
-
-@app.route(f"/admin/cleanup-all/{_CLEANUP_TOKEN}", methods=["POST"])
-def cleanup_all_leads():
-    email = (request.json or {}).get("email", "")
-    preview = request.args.get("preview") == "1"
-    delete_ids_param = (request.json or {}).get("delete_ids")
-    conn = get_db()
-    usuario = conn.execute("SELECT id FROM usuarios WHERE LOWER(email)=LOWER(%s)", (email,)).fetchone()
-    if not usuario:
-        todos = conn.execute("SELECT id, nome, email FROM usuarios").fetchall()
-        conn.close()
-        return jsonify({"erro": "Usuário não encontrado", "usuarios": [{"id": u["id"], "nome": u["nome"], "email": u["email"]} for u in todos]}), 404
-    uid = usuario["id"]
-
-    if delete_ids_param:
-        # Deletar IDs específicos
-        ids = [int(i) for i in delete_ids_param]
-        placeholders = ",".join(["%s"] * len(ids)) if USE_PG else ",".join(["?"] * len(ids))
-        conn.execute(f"DELETE FROM leads WHERE usuario_id=%s AND id IN ({placeholders})", [uid] + ids)
-        conn.commit()
-        conn.close()
-        return jsonify({"deletados": len(ids)})
-
-    # Listar todos os leads
-    result = conn.execute(
-        "SELECT id, nome, etapa, criado_em FROM leads WHERE usuario_id=%s ORDER BY criado_em",
-        (uid,)
-    ).fetchall()
-    conn.close()
-    leads = [{"id": r["id"], "nome": r["nome"], "etapa": r["etapa"], "criado_em": str(r["criado_em"])} for r in result]
-    return jsonify({"total": len(leads), "leads": leads})
-# ─── FIM ROTA TEMPORÁRIA ─────────────────────────────────────────────────────
-
 
 init_db()
 
