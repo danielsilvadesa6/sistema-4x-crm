@@ -882,11 +882,12 @@ def api_mover():
         if not lead["motivo_perda"]:
             erro = "Informe o motivo da perda antes de mover para Perdido."
     elif idx_novo > idx_atual:
-        # Avanço: exige observações preenchidas em qualquer transição
-        if not lead["observacoes"]:
+        if nova_etapa == "Tentando Contato":
+            # Primeiro passo: só exige WhatsApp
+            if not lead["whatsapp"]:
+                erro = "Preencha o WhatsApp do lead antes de avançar."
+        elif not lead["observacoes"]:
             erro = "Preencha as observações do lead antes de avançar."
-        elif nova_etapa == "Tentando Contato" and not lead["whatsapp"]:
-            erro = "Preencha o WhatsApp do lead antes de avançar."
         elif nova_etapa == "Negócio Fechado" and not lead["valor_servico"]:
             erro = "Preencha o valor do serviço antes de fechar o negócio."
 
