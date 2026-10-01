@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Minha Conta{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Minha Conta</h1>
+    <span class="subtitle">Gerencie suas informações e senha</span>
+  </div>
+</div>
+
+<div style="max-width:480px">
+
+  {% if sucesso %}
+  <div style="background:#0d2b1a;border:1px solid #2a7a4a;border-radius:10px;padding:14px 18px;margin-bottom:20px;color:#4caf7d;font-size:14px">
+    ✓ {{ sucesso }}
+  </div>
+  {% endif %}
+
+  {% if erro %}
+  <div style="background:#2b0d0d;border:1px solid #7a2a2a;border-radius:10px;padding:14px 18px;margin-bottom:20px;color:#e57373;font-size:14px">
+    {{ erro }}
+  </div>
+  {% endif %}
+
+  <div class="card" style="padding:24px;margin-bottom:24px">
+    <h2 style="font-size:16px;font-weight:600;margin-bottom:16px">Informações da Conta</h2>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:6px">Nome</div>
+    <div style="font-size:15px;font-weight:500;margin-bottom:16px">{{ current_user.nome }}</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:6px">E-mail</div>
+    <div style="font-size:15px;font-weight:500">{{ current_user.email }}</div>
+  </div>
+
+  <div class="card" style="padding:24px">
+    <h2 style="font-size:16px;font-weight:600;margin-bottom:20px">Trocar Senha</h2>
+    <form method="POST" action="{{ url_for('minha_conta') }}">
+      <div class="form-group">
+        <label class="form-label">Senha Atual</label>
+        <input type="password" name="senha_atual" class="input" required autocomplete="current-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nova Senha</label>
+        <input type="password" name="nova_senha" class="input" required autocomplete="new-password" minlength="6">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmar Nova Senha</label>
+        <input type="password" name="confirmar_senha" class="input" required autocomplete="new-password" minlength="6">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">Salvar nova senha</button>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

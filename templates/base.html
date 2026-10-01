@@ -66,6 +66,10 @@
           <strong>{{ current_user.nome }}</strong>
           {{ current_user.email }}
         </div>
+        <a href="{{ url_for('minha_conta') }}" class="nav-item {% if request.endpoint == 'minha_conta' %}active{% endif %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/><path d="M16 3.5a4 4 0 0 1 0 7"/></svg>
+          Minha Conta
+        </a>
         <a href="{{ url_for('logout') }}" class="nav-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           Sair

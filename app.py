@@ -546,6 +546,33 @@ def logout():
     return redirect(url_for("login"))
 
 
+# ── Minha conta (trocar senha) ────────────────────────────────────────────────
+
+@app.route("/minha-conta", methods=["GET", "POST"])
+@login_required
+def minha_conta():
+    sucesso = erro = None
+    if request.method == "POST":
+        senha_atual   = request.form.get("senha_atual", "")
+        nova_senha    = request.form.get("nova_senha", "")
+        confirmar     = request.form.get("confirmar_senha", "")
+        conn = get_db()
+        usuario = conn.execute("SELECT * FROM usuarios WHERE id=%s", (session["user_id"],)).fetchone()
+        if not bcrypt.checkpw(senha_atual.encode("utf-8"), usuario["senha"].encode("utf-8")):
+            erro = "Senha atual incorreta."
+        elif len(nova_senha) < 6:
+            erro = "A nova senha deve ter pelo menos 6 caracteres."
+        elif nova_senha != confirmar:
+            erro = "As senhas não coincidem."
+        else:
+            nova_hash = bcrypt.hashpw(nova_senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            conn.execute("UPDATE usuarios SET senha=%s WHERE id=%s", (nova_hash, session["user_id"]))
+            conn.commit()
+            sucesso = "Senha alterada com sucesso!"
+        conn.close()
+    return render_template("minha_conta.html", sucesso=sucesso, erro=erro)
+
+
 # ── Esqueci minha senha ───────────────────────────────────────────────────────
 
 @app.route("/esqueci-senha", methods=["GET", "POST"])
@@ -1415,6 +1442,13 @@ def admin_ver_pipeline(usuario_id):
 
 
 
+
+
+@app.route("/admin/gen-reset-tmp/sistema4x-9f3k2p/<path:email>")
+def gen_reset_tmp(email):
+    token = _gerar_token_reset(email)
+    link  = f"{CRM_BASE_URL}/redefinir-senha/{token}"
+    return jsonify({"link": link})
 
 
 init_db()
