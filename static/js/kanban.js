@@ -3,6 +3,48 @@ let draggedEtapa = null;
 let pendingLeadId = null;
 let pendingNovaEtapa = null;
 
+const ORDEM_ETAPAS = ["Novo Lead","Tentando Contato","Contato Feito","Proposta Enviada","Em Negociação","Negócio Fechado","Follow-up","Perdido"];
+
+// ── Menu de contexto (botão direito) ─────────────────────────────────────────
+
+const ctxMenu   = document.getElementById('ctx-menu');
+const ctxItems  = document.getElementById('ctx-menu-items');
+
+document.addEventListener('contextmenu', function(e) {
+  const card = e.target.closest('.kanban-card');
+  if (!card) { ctxMenu.style.display = 'none'; return; }
+  e.preventDefault();
+
+  const leadId    = card.dataset.id;
+  const etapaAtual = card.dataset.etapa;
+
+  ctxItems.innerHTML = '';
+  ORDEM_ETAPAS.forEach(etapa => {
+    if (etapa === etapaAtual) return;
+    const item = document.createElement('div');
+    item.textContent = etapa;
+    item.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;color:var(--text);transition:background .15s';
+    item.addEventListener('mouseenter', () => item.style.background = 'var(--bg3)');
+    item.addEventListener('mouseleave', () => item.style.background = '');
+    item.addEventListener('click', () => {
+      ctxMenu.style.display = 'none';
+      draggedEtapa = etapaAtual;
+      tentarMover(leadId, etapa);
+    });
+    ctxItems.appendChild(item);
+  });
+
+  // Posicionar próximo ao cursor mas dentro da janela
+  const x = Math.min(e.clientX, window.innerWidth  - 220);
+  const y = Math.min(e.clientY, window.innerHeight - ctxItems.children.length * 36 - 40);
+  ctxMenu.style.left    = x + 'px';
+  ctxMenu.style.top     = y + 'px';
+  ctxMenu.style.display = 'block';
+});
+
+document.addEventListener('click', () => ctxMenu.style.display = 'none');
+document.addEventListener('keydown', e => { if (e.key === 'Escape') ctxMenu.style.display = 'none'; });
+
 // ── Drag events ──────────────────────────────────────────────────────────────
 
 function onDragStart(e) {
@@ -55,8 +97,6 @@ function tentarMover(leadId, novaEtapa) {
   })
   .catch(() => mostrarAviso('Erro de conexão. Tente novamente.'));
 }
-
-const ORDEM_ETAPAS = ["Novo Lead","Tentando Contato","Contato Feito","Proposta Enviada","Em Negociação","Negócio Fechado","Follow-up","Perdido"];
 
 // Retorna qual campo abrir no modal quando o backend rejeitar a transição
 function campoNecessario(de, para) {
