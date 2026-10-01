@@ -1444,12 +1444,6 @@ def admin_ver_pipeline(usuario_id):
 
 
 
-@app.route("/admin/gen-reset-tmp/sistema4x-9f3k2p/<path:email>")
-def gen_reset_tmp(email):
-    token = _gerar_token_reset(email)
-    link  = f"{CRM_BASE_URL}/redefinir-senha/{token}"
-    return jsonify({"link": link})
-
 
 init_db()
 
