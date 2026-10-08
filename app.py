@@ -71,7 +71,7 @@ if USE_PG:
     import psycopg2
     import psycopg2.extras
 
-ETAPAS = ["Novo Lead", "Tentando Contato", "Contato Feito", "Proposta Enviada", "Em Negociação", "Negócio Fechado", "Follow-up", "Perdido"]
+ETAPAS = ["Novo Lead", "Tentando Contato", "Contato Feito", "Proposta Enviada", "Em Negociação", "Agendado", "Negócio Fechado", "Follow-up", "Perdido"]
 SEGMENTOS       = ["Advocacia", "Clínica Médica", "Odontologia", "Psicologia", "Veterinária", "Outro"]
 ORIGENS         = ["Google Ads", "Instagram", "YouTube", "Indicação", "Site", "WhatsApp direto", "Outro"]
 TIPOS_INTERACAO = ["WhatsApp", "Ligação", "E-mail", "Reunião", "Presencial", "Outro"]

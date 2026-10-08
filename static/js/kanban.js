@@ -3,7 +3,7 @@ let draggedEtapa = null;
 let pendingLeadId = null;
 let pendingNovaEtapa = null;
 
-const ORDEM_ETAPAS = ["Novo Lead","Tentando Contato","Contato Feito","Proposta Enviada","Em Negociação","Negócio Fechado","Follow-up","Perdido"];
+const ORDEM_ETAPAS = ["Novo Lead","Tentando Contato","Contato Feito","Proposta Enviada","Em Negociação","Agendado","Negócio Fechado","Follow-up","Perdido"];
 
 // ── Menu de contexto (botão direito) ─────────────────────────────────────────
 
