@@ -31,9 +31,10 @@
     <div style="font-size:15px;font-weight:500">{{ current_user.email }}</div>
   </div>
 
-  <div class="card" style="padding:24px">
+  <div class="card" style="padding:24px;margin-bottom:24px">
     <h2 style="font-size:16px;font-weight:600;margin-bottom:20px">Trocar Senha</h2>
     <form method="POST" action="{{ url_for('minha_conta') }}">
+      <input type="hidden" name="acao" value="senha">
       <div class="form-group">
         <label class="form-label">Senha Atual</label>
         <input type="password" name="senha_atual" class="input" required autocomplete="current-password">
@@ -47,6 +48,34 @@
         <input type="password" name="confirmar_senha" class="input" required autocomplete="new-password" minlength="6">
       </div>
       <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">Salvar nova senha</button>
+    </form>
+  </div>
+
+  {% if sucesso_meta %}
+  <div style="background:#0d2b1a;border:1px solid #2a7a4a;border-radius:10px;padding:14px 18px;margin-bottom:20px;color:#4caf7d;font-size:14px">
+    ✓ {{ sucesso_meta }}
+  </div>
+  {% endif %}
+  {% if erro_meta %}
+  <div style="background:#2b0d0d;border:1px solid #7a2a2a;border-radius:10px;padding:14px 18px;margin-bottom:20px;color:#e57373;font-size:14px">
+    {{ erro_meta }}
+  </div>
+  {% endif %}
+
+  <div class="card" style="padding:24px">
+    <h2 style="font-size:16px;font-weight:600;margin-bottom:6px">Integração Meta (Facebook/Instagram)</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:20px">Quando um negócio for fechado no CRM, o evento de conversão é enviado automaticamente para sua conta no Meta.</p>
+    <form method="POST" action="{{ url_for('minha_conta') }}">
+      <input type="hidden" name="acao" value="meta">
+      <div class="form-group">
+        <label class="form-label">Pixel ID</label>
+        <input type="text" name="meta_pixel_id" class="input" value="{{ meta_pixel_id }}" placeholder="Ex: 1234567890123456" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Access Token (API de Conversões)</label>
+        <input type="password" name="meta_access_token" class="input" value="{{ meta_access_token }}" placeholder="Cole o token gerado no Gerenciador de Eventos" autocomplete="off">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">Salvar integração Meta</button>
     </form>
   </div>
 

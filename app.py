@@ -551,26 +551,45 @@ def logout():
 @app.route("/minha-conta", methods=["GET", "POST"])
 @login_required
 def minha_conta():
-    sucesso = erro = None
+    sucesso = erro = sucesso_meta = erro_meta = None
+    conn = get_db()
+
     if request.method == "POST":
-        senha_atual   = request.form.get("senha_atual", "")
-        nova_senha    = request.form.get("nova_senha", "")
-        confirmar     = request.form.get("confirmar_senha", "")
-        conn = get_db()
-        usuario = conn.execute("SELECT * FROM usuarios WHERE id=%s", (session["user_id"],)).fetchone()
-        if not bcrypt.checkpw(senha_atual.encode("utf-8"), usuario["senha"].encode("utf-8")):
-            erro = "Senha atual incorreta."
-        elif len(nova_senha) < 6:
-            erro = "A nova senha deve ter pelo menos 6 caracteres."
-        elif nova_senha != confirmar:
-            erro = "As senhas não coincidem."
-        else:
-            nova_hash = bcrypt.hashpw(nova_senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-            conn.execute("UPDATE usuarios SET senha=%s WHERE id=%s", (nova_hash, session["user_id"]))
+        acao = request.form.get("acao", "senha")
+
+        if acao == "senha":
+            senha_atual = request.form.get("senha_atual", "")
+            nova_senha  = request.form.get("nova_senha", "")
+            confirmar   = request.form.get("confirmar_senha", "")
+            usuario = conn.execute("SELECT * FROM usuarios WHERE id=%s", (session["user_id"],)).fetchone()
+            if not bcrypt.checkpw(senha_atual.encode("utf-8"), usuario["senha"].encode("utf-8")):
+                erro = "Senha atual incorreta."
+            elif len(nova_senha) < 6:
+                erro = "A nova senha deve ter pelo menos 6 caracteres."
+            elif nova_senha != confirmar:
+                erro = "As senhas não coincidem."
+            else:
+                nova_hash = bcrypt.hashpw(nova_senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                conn.execute("UPDATE usuarios SET senha=%s WHERE id=%s", (nova_hash, session["user_id"]))
+                conn.commit()
+                sucesso = "Senha alterada com sucesso!"
+
+        elif acao == "meta":
+            pixel_id     = request.form.get("meta_pixel_id", "").strip()
+            access_token = request.form.get("meta_access_token", "").strip()
+            conn.execute(
+                "UPDATE usuarios SET meta_pixel_id=%s, meta_access_token=%s WHERE id=%s",
+                (pixel_id or None, access_token or None, session["user_id"])
+            )
             conn.commit()
-            sucesso = "Senha alterada com sucesso!"
-        conn.close()
-    return render_template("minha_conta.html", sucesso=sucesso, erro=erro)
+            sucesso_meta = "Integração Meta salva com sucesso!"
+
+    usuario = conn.execute("SELECT * FROM usuarios WHERE id=%s", (session["user_id"],)).fetchone()
+    conn.close()
+    return render_template("minha_conta.html", sucesso=sucesso, erro=erro,
+                           sucesso_meta=sucesso_meta, erro_meta=erro_meta,
+                           meta_pixel_id=usuario["meta_pixel_id"] or "",
+                           meta_access_token=usuario["meta_access_token"] or "")
 
 
 # ── Esqueci minha senha ───────────────────────────────────────────────────────
